@@ -72,7 +72,8 @@ class RoomManager {
       winner: null,
       status: 'waiting',
       createdAt: now,
-      lastActivity: now
+      lastActivity: now,
+      rematchRequests: { black: false, white: false }  // 再来一局请求状态
     };
     
     this.rooms.set(roomId, room);
@@ -254,7 +255,7 @@ class RoomManager {
   }
 
   /**
-   * 清理空房间（无人超过指定时间）
+   * 清理空房间（无玩家超过5分钟后删除）
    * Requirements: 3.6
    * @param {number} maxIdleTime - 最大空闲时间（毫秒），默认5分钟
    * @returns {string[]} 被删除的房间ID列表
@@ -264,18 +265,96 @@ class RoomManager {
     const deletedRooms = [];
     
     for (const [roomId, room] of this.rooms.entries()) {
-      // 检查房间是否为空（无玩家和观战者）
-      const isEmpty = !room.players.black && !room.players.white && room.watchers.length === 0;
+      // 检查房间是否无玩家（只有观战者或完全为空）
+      const hasNoPlayers = !room.players.black && !room.players.white;
       // 检查是否超时
       const isIdle = (now - room.lastActivity) > maxIdleTime;
       
-      if (isEmpty && isIdle) {
+      if (hasNoPlayers && isIdle) {
         this.deleteRoom(roomId);
         deletedRooms.push(roomId);
       }
     }
     
     return deletedRooms;
+  }
+
+  /**
+   * 重置房间开始新游戏（根据上局胜负交换黑白棋）
+   * @param {string} roomId - 房间ID
+   * @param {boolean} swapColors - 是否交换黑白棋
+   * @returns {boolean} 是否成功重置
+   */
+  resetRoom(roomId, swapColors = false) {
+    const room = this.getRoom(roomId);
+    if (!room) return false;
+    
+    // 如果需要交换黑白棋
+    if (swapColors && room.players.black && room.players.white) {
+      const tempBlack = room.players.black;
+      room.players.black = room.players.white;
+      room.players.white = tempBlack;
+    }
+    
+    room.board = GameLogic.createEmptyBoard();
+    room.currentTurn = GameLogic.BLACK;
+    room.history = [];
+    room.winner = null;
+    room.status = 'waiting';
+    room.rematchRequests = { black: false, white: false };
+    room.lastActivity = Date.now();
+    
+    // 如果双方玩家都在，直接开始游戏
+    if (room.players.black && room.players.white) {
+      room.status = 'playing';
+    }
+    
+    return true;
+  }
+
+  /**
+   * 请求再来一局
+   * @param {string} roomId - 房间ID
+   * @param {string} socketId - 请求者的 socket ID
+   * @returns {{success: boolean, bothReady?: boolean, swapped?: boolean, error?: string}} 结果
+   */
+  requestRematch(roomId, socketId) {
+    const room = this.getRoom(roomId);
+    if (!room) {
+      return { success: false, error: '房间不存在' };
+    }
+    
+    // 确定请求者是哪方
+    let playerColor = null;
+    if (room.players.black && room.players.black.socketId === socketId) {
+      playerColor = 'black';
+    } else if (room.players.white && room.players.white.socketId === socketId) {
+      playerColor = 'white';
+    }
+    
+    if (!playerColor) {
+      return { success: false, error: '您不是游戏玩家' };
+    }
+    
+    // 标记该玩家请求再来一局
+    room.rematchRequests[playerColor] = true;
+    room.lastActivity = Date.now();
+    
+    // 检查双方是否都请求了再来一局
+    const bothReady = room.rematchRequests.black && room.rematchRequests.white;
+    
+    if (bothReady) {
+      // 根据上局胜负决定是否交换黑白棋
+      // 如果有胜者，则交换黑白棋（胜者变为后手）
+      const shouldSwap = room.winner !== null;
+      
+      // 重置房间，传入是否交换
+      this.resetRoom(roomId, shouldSwap);
+      
+      return { success: true, bothReady: true, swapped: shouldSwap };
+    }
+    
+    return { success: true, bothReady: false };
   }
 
   /**

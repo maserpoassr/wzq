@@ -348,6 +348,53 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chat-received', chatMessage);
   });
   
+  // 请求再来一局
+  socket.on('request-rematch', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    // 获取房间信息（在重置前）
+    const roomBefore = roomManager.getRoom(roomId);
+    if (!roomBefore) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    // 记录当前玩家的颜色（在重置前）
+    const playerColorBefore = roomBefore.players.black?.socketId === socket.id ? 'black' : 'white';
+    const opponentColorBefore = playerColorBefore === 'black' ? 'white' : 'black';
+    const opponent = roomBefore.players[opponentColorBefore];
+    
+    const result = roomManager.requestRematch(roomId, socket.id);
+    
+    if (!result.success) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+    
+    if (result.bothReady) {
+      // 双方都准备好了，开始新游戏
+      const room = roomManager.getRoom(roomId);
+      io.to(roomId).emit('rematch-start', { 
+        swapped: result.swapped,
+        message: result.swapped ? '黑白棋已交换！' : '新游戏开始！'
+      });
+      broadcastRoomUpdate(roomId);
+      broadcastRoomList();
+      console.log(`[再来一局] 房间 ${roomId} 开始新游戏${result.swapped ? '（已交换黑白棋）' : ''}`);
+    } else {
+      // 通知对方有人请求再来一局
+      if (opponent) {
+        io.to(opponent.socketId).emit('rematch-requested', {
+          from: user.nickname
+        });
+      }
+      
+      // 通知请求者正在等待
+      socket.emit('rematch-waiting');
+    }
+  });
+  
   // 刷新房间列表
   socket.on('refresh-rooms', () => {
     socket.emit('room-list', roomManager.getRoomList());
@@ -360,10 +407,11 @@ io.on('connection', (socket) => {
     if (user) {
       // 如果在房间中，离开房间
       if (user.currentRoom) {
-        const result = roomManager.leaveRoom(user.currentRoom, socket.id);
+        const roomId = user.currentRoom;
+        const result = roomManager.leaveRoom(roomId, socket.id);
         if (result.success) {
-          socket.to(user.currentRoom).emit('player-left', { nickname: result.nickname });
-          broadcastRoomUpdate(user.currentRoom);
+          socket.to(roomId).emit('player-left', { nickname: result.nickname });
+          broadcastRoomUpdate(roomId);
           broadcastRoomList();
         }
       }

@@ -18,7 +18,9 @@ COPY public/ ./public/
 # 暴露端口
 EXPOSE 3000
 
-# 设置环境变量
+# 设置默认环境变量
+# NODE_ENV: 运行环境 (production/development)
+# PORT: 服务器端口 (默认 3000)
 ENV NODE_ENV=production
 ENV PORT=3000
 

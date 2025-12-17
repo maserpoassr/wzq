@@ -325,10 +325,11 @@
                 <th>状态</th>
                 <th>观战</th>
                 <th>操作</th>
+                <th>邀请</th>
               </tr>
             </thead>
             <tbody id="roomListBody">
-              <tr><td colspan="7" class="empty-list">暂无房间</td></tr>
+              <tr><td colspan="8" class="empty-list">暂无房间</td></tr>
             </tbody>
           </table>
         </div>
@@ -367,6 +368,7 @@
             <button class="btn btn-outline btn-sm" id="undoBtn">请求悔棋</button>
             <button class="btn btn-danger btn-sm" id="surrenderBtn">认输</button>
             <button class="btn btn-outline btn-sm" id="leaveRoomBtn">退出房间</button>
+            <button class="btn btn-outline btn-sm" id="inviteBtn">邀请好友</button>
           </div>
 
           <div class="chat-container">
@@ -405,6 +407,19 @@
     </div>
   </div>
 
+  <!-- 游戏结束选择弹窗 -->
+  <div class="modal-overlay" id="gameEndModal">
+    <div class="modal result-modal">
+      <h2 id="gameEndText">游戏结束</h2>
+      <p id="gameEndDetail"></p>
+      <p id="rematchStatus" style="color: var(--text-light); margin-top: 0.5rem;"></p>
+      <div class="modal-actions" style="justify-content: center; margin-top: 1rem; gap: 1rem;">
+        <button class="btn btn-success" id="rematchBtn">再来一局</button>
+        <button class="btn btn-outline" id="leaveAfterGameBtn">离开房间</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 悔棋请求弹窗 -->
   <div class="modal-overlay" id="undoRequestModal">
     <div class="modal">
@@ -430,7 +445,10 @@
       myRole: null,
       board: null,
       lastMove: null,
-      winningStones: null
+      winningStones: null,
+      gameEnded: false,
+      rematchRequested: false,
+      pendingRoomId: null  // 通过邀请链接待加入的房间ID
     };
 
     // ==================== DOM 元素 ====================
@@ -627,6 +645,8 @@
         state.board = room.board;
         state.lastMove = room.history.length > 0 ? room.history[room.history.length - 1] : null;
         state.winningStones = null;
+        state.gameEnded = false;
+        state.rematchRequested = false;
         
         showView(gameView);
         updateGameUI();
@@ -651,6 +671,8 @@
       
       state.socket.on('game-over', ({ winner, winningStones, surrender }) => {
         state.winningStones = winningStones;
+        state.gameEnded = true;
+        state.rematchRequested = false;
         renderBoard();
         
         const winnerText = winner === 1 ? '黑棋' : '白棋';
@@ -662,6 +684,47 @@
         resultDetail.textContent = surrender ? '对方认输' : '五子连珠';
         
         $('resultModal').classList.add('active');
+      });
+      
+      // 再来一局相关事件
+      state.socket.on('rematch-requested', ({ from }) => {
+        $('rematchStatus').textContent = `${from} 请求再来一局`;
+      });
+      
+      state.socket.on('rematch-waiting', () => {
+        state.rematchRequested = true;
+        $('rematchBtn').textContent = '等待对方...';
+        $('rematchBtn').disabled = true;
+        $('rematchStatus').textContent = '等待对方确认...';
+      });
+      
+      state.socket.on('rematch-start', ({ swapped, message }) => {
+        state.gameEnded = false;
+        state.rematchRequested = false;
+        state.winningStones = null;
+        $('gameEndModal').classList.remove('active');
+        $('rematchBtn').textContent = '再来一局';
+        $('rematchBtn').disabled = false;
+        $('rematchStatus').textContent = '';
+        showToast(message || '新游戏开始！');
+        
+        // 如果交换了黑白棋，更新角色
+        if (swapped) {
+          state.myRole = state.myRole === 'black' ? 'white' : 'black';
+        }
+      });
+      
+      state.socket.on('room-closed', ({ reason }) => {
+        showToast(reason);
+        state.currentRoom = null;
+        state.myRole = null;
+        state.board = null;
+        state.lastMove = null;
+        state.winningStones = null;
+        state.gameEnded = false;
+        $('gameEndModal').classList.remove('active');
+        $('resultModal').classList.remove('active');
+        showView(lobbyView);
       });
       
       state.socket.on('player-joined', ({ nickname, role }) => {
@@ -693,7 +756,7 @@
     // ==================== UI 更新 ====================
     function updateRoomList(rooms) {
       if (rooms.length === 0) {
-        roomListBody.innerHTML = '<tr><td colspan="7" class="empty-list">暂无房间</td></tr>';
+        roomListBody.innerHTML = '<tr><td colspan="8" class="empty-list">暂无房间</td></tr>';
         return;
       }
       
@@ -714,9 +777,29 @@
               ${canJoin ? `<button class="btn btn-success btn-sm" onclick="joinRoom('${room.id}', false)">加入</button>` : ''}
               <button class="btn btn-outline btn-sm" onclick="joinRoom('${room.id}', true)">观战</button>
             </td>
+            <td>
+              <button class="btn btn-outline btn-sm" onclick="copyInviteLink('${room.id}')">邀请</button>
+            </td>
           </tr>
         `;
       }).join('');
+    }
+    
+    // 复制邀请链接
+    function copyInviteLink(roomId) {
+      const url = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('邀请链接已复制到剪贴板');
+      }).catch(() => {
+        // 降级方案：创建临时输入框
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('邀请链接已复制到剪贴板');
+      });
     }
 
     function updateGameUI() {
@@ -778,6 +861,14 @@
       lobbyContent.style.display = 'block';
       nicknameInput.disabled = true;
       $('joinLobbyBtn').disabled = true;
+      
+      // 如果有待加入的房间，自动加入
+      if (state.pendingRoomId) {
+        setTimeout(() => {
+          joinRoom(state.pendingRoomId, false);
+          state.pendingRoomId = null;
+        }, 500);
+      }
     }
 
     function createRoom() {
@@ -799,6 +890,11 @@
         state.board = null;
         state.lastMove = null;
         state.winningStones = null;
+        state.gameEnded = false;
+        state.rematchRequested = false;
+        // 关闭所有弹窗
+        $('resultModal').classList.remove('active');
+        $('gameEndModal').classList.remove('active');
         showView(lobbyView);
       }
     }
@@ -818,6 +914,11 @@
     $('refreshBtn').onclick = () => state.socket.emit('refresh-rooms');
     
     $('leaveRoomBtn').onclick = leaveRoom;
+    $('inviteBtn').onclick = () => {
+      if (state.currentRoom) {
+        copyInviteLink(state.currentRoom.id);
+      }
+    };
     $('undoBtn').onclick = () => {
       if (state.currentRoom) {
         state.socket.emit('request-undo', { roomId: state.currentRoom.id });
@@ -838,7 +939,34 @@
       $('undoRequestModal').classList.remove('active');
     };
     
-    $('closeResultBtn').onclick = () => $('resultModal').classList.remove('active');
+    $('closeResultBtn').onclick = () => {
+      $('resultModal').classList.remove('active');
+      
+      // 如果是玩家，显示再来一局选项
+      if (state.myRole === 'black' || state.myRole === 'white') {
+        const winnerText = state.currentRoom?.winner === 1 ? '黑棋' : '白棋';
+        $('gameEndText').textContent = `${winnerText}获胜！`;
+        $('gameEndText').className = state.currentRoom?.winner === 1 ? 'winner-black' : 'winner-white';
+        $('gameEndDetail').textContent = '选择下一步操作';
+        $('rematchStatus').textContent = '';
+        $('rematchBtn').textContent = '再来一局';
+        $('rematchBtn').disabled = false;
+        $('gameEndModal').classList.add('active');
+      }
+    };
+    
+    // 再来一局按钮
+    $('rematchBtn').onclick = () => {
+      if (state.currentRoom && !state.rematchRequested) {
+        state.socket.emit('request-rematch', { roomId: state.currentRoom.id });
+      }
+    };
+    
+    // 游戏结束后离开房间
+    $('leaveAfterGameBtn').onclick = () => {
+      $('gameEndModal').classList.remove('active');
+      leaveRoom();
+    };
     
     // 聊天
     $('sendChatBtn').onclick = () => {
@@ -868,6 +996,18 @@
     // ==================== 初始化 ====================
     initSocket();
     resizeBoard();
+    
+    // 检查 URL 参数，自动加入房间
+    function checkUrlParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const roomId = urlParams.get('room');
+      if (roomId) {
+        state.pendingRoomId = roomId;
+        // 清除 URL 参数
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
+    checkUrlParams();
   </script>
 </body>
 </html>
