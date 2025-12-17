@@ -1,4 +1,5 @@
 # Gomoku Online - Docker 部署文件
+# Build version: 2.0.0 - 2024-12-17
 FROM node:18-alpine
 
 # 设置工作目录
