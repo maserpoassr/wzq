@@ -530,6 +530,7 @@
           
           <div class="game-actions" style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
             <button class="btn btn-outline" id="undoBtn" style="flex: 1; padding: 0.6rem;">悔棋</button>
+            <button class="btn btn-outline" id="swapBtn" style="flex: 1; padding: 0.6rem;">换方</button>
             <button class="btn btn-outline" id="inviteBtn" style="flex: 1; padding: 0.6rem;">邀请</button>
             <button class="btn btn-danger" id="surrenderBtn" style="flex: 1; padding: 0.6rem;">认输</button>
             <button class="btn btn-outline" id="leaveRoomBtn" style="width: 100%; padding: 0.6rem;">退出房间</button>
@@ -589,6 +590,17 @@
       <div style="display: flex; gap: 1rem; justify-content: center;">
         <button class="btn btn-danger" id="rejectUndoBtn">残忍拒绝</button>
         <button class="btn btn-primary" id="acceptUndoBtn">大度同意</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="swapRequestModal">
+    <div class="modal">
+      <h2>换方请求</h2>
+      <p><span id="swapRequester" style="font-weight: bold;">对方</span> 想要交换黑白棋，是否同意？</p>
+      <div style="display: flex; gap: 1rem; justify-content: center;">
+        <button class="btn btn-danger" id="rejectSwapBtn">拒绝</button>
+        <button class="btn btn-primary" id="acceptSwapBtn">同意</button>
       </div>
     </div>
   </div>
@@ -1050,6 +1062,22 @@
       
       state.socket.on('undo-result', ({ accepted }) => showToast(accepted ? '悔棋成功' : '对方拒绝了悔棋'));
       
+      // 换方请求
+      state.socket.on('swap-requested', ({ from }) => {
+        $('swapRequester').textContent = from;
+        $('swapRequestModal').classList.add('active');
+      });
+      
+      state.socket.on('swap-result', ({ accepted }) => {
+        if (accepted) {
+          // 交换自己的角色
+          state.myRole = state.myRole === 'black' ? 'white' : 'black';
+          showToast('🔄 换方成功！');
+        } else {
+          showToast('对方拒绝了换方请求');
+        }
+      });
+      
       state.socket.on('rematch-waiting', () => {
         state.rematchRequested = true;
         $('rematchBtn').textContent = '等待对方确认...';
@@ -1205,6 +1233,32 @@
     $('rejectUndoBtn').onclick = () => {
       state.socket.emit('respond-undo', { roomId: state.currentRoom.id, accept: false });
       $('undoRequestModal').classList.remove('active');
+    };
+    
+    // 换方按钮
+    $('swapBtn').onclick = () => {
+      if (!state.currentRoom || state.currentRoom.status !== 'playing') {
+        showToast('游戏未在进行中');
+        return;
+      }
+      if (state.currentRoom.history && state.currentRoom.history.length > 0) {
+        showToast('已有落子，无法换方');
+        return;
+      }
+      if (state.myRole === 'watcher') {
+        showToast('观战者无法换方');
+        return;
+      }
+      state.socket.emit('request-swap', { roomId: state.currentRoom.id });
+      showToast('已发送换方请求...');
+    };
+    $('acceptSwapBtn').onclick = () => {
+      state.socket.emit('respond-swap', { roomId: state.currentRoom.id, accept: true });
+      $('swapRequestModal').classList.remove('active');
+    };
+    $('rejectSwapBtn').onclick = () => {
+      state.socket.emit('respond-swap', { roomId: state.currentRoom.id, accept: false });
+      $('swapRequestModal').classList.remove('active');
     };
 
     $('closeResultBtn').onclick = () => {

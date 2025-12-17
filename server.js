@@ -395,6 +395,99 @@ io.on('connection', (socket) => {
     broadcastRoomUpdate(roomId);
   });
   
+  // 请求换方
+  socket.on('request-swap', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    // 检查游戏是否进行中
+    if (room.status !== 'playing') {
+      socket.emit('error', { message: '游戏未在进行中' });
+      return;
+    }
+    
+    // 检查是否已有落子（只有开局时才能换方）
+    if (room.history.length > 0) {
+      socket.emit('error', { message: '已有落子，无法换方' });
+      return;
+    }
+    
+    // 确定请求者是哪方
+    let requesterColor = null;
+    if (room.players.black && room.players.black.socketId === socket.id) {
+      requesterColor = 'black';
+    } else if (room.players.white && room.players.white.socketId === socket.id) {
+      requesterColor = 'white';
+    }
+    
+    if (!requesterColor) {
+      socket.emit('error', { message: '您不是游戏玩家' });
+      return;
+    }
+    
+    // 获取对手
+    const opponentColor = requesterColor === 'black' ? 'white' : 'black';
+    const opponent = room.players[opponentColor];
+    
+    if (!opponent) {
+      socket.emit('error', { message: '对手不在房间中' });
+      return;
+    }
+    
+    // 发送换方请求给对手
+    io.to(opponent.socketId).emit('swap-requested', {
+      from: user.nickname
+    });
+    
+    showToast && console.log(`[换方] ${user.nickname} 请求换方`);
+  });
+  
+  // 响应换方请求
+  socket.on('respond-swap', ({ roomId, accept }) => {
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    // 检查游戏是否进行中
+    if (room.status !== 'playing') {
+      socket.emit('error', { message: '游戏未在进行中' });
+      return;
+    }
+    
+    // 检查是否已有落子
+    if (room.history.length > 0) {
+      socket.emit('error', { message: '已有落子，无法换方' });
+      return;
+    }
+    
+    if (!accept) {
+      io.to(roomId).emit('swap-result', { accepted: false });
+      return;
+    }
+    
+    // 执行换方：交换黑白棋玩家
+    const tempBlack = room.players.black;
+    room.players.black = room.players.white;
+    room.players.white = tempBlack;
+    
+    // 广播换方结果
+    io.to(roomId).emit('swap-result', { accepted: true });
+    
+    // 重新启动计时器（因为先手变了）
+    startTurnTimer(roomId);
+    
+    broadcastRoomUpdate(roomId);
+    console.log(`[换方] 房间 ${roomId} 换方成功`);
+  });
+
   // 请求悔棋
   socket.on('request-undo', ({ roomId }) => {
     const room = roomManager.getRoom(roomId);
