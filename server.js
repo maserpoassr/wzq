@@ -38,6 +38,12 @@ const onlineUsers = new Map();
 // 大厅用户集合
 const lobbyUsers = new Set();
 
+// 房间计时器映射 (roomId -> { timer, startTime })
+const roomTimers = new Map();
+
+// 回合时间限制（毫秒）
+const TURN_TIME_LIMIT = 30000; // 30秒
+
 /**
  * 广播房间列表给所有大厅用户
  */
@@ -72,6 +78,105 @@ function broadcastRoomUpdate(roomId) {
   for (const socketId of participants) {
     const clientView = serializeForClient(room, socketId);
     io.to(socketId).emit('room-updated', clientView);
+  }
+}
+
+/**
+ * 启动回合计时器
+ */
+function startTurnTimer(roomId) {
+  // 清除旧计时器
+  clearTurnTimer(roomId);
+  
+  const room = roomManager.getRoom(roomId);
+  if (!room || room.status !== 'playing' || room.winner) return;
+  
+  const startTime = Date.now();
+  
+  // 广播计时开始
+  io.to(roomId).emit('turn-timer-start', { 
+    timeLimit: TURN_TIME_LIMIT,
+    currentTurn: room.currentTurn
+  });
+  
+  // 设置超时计时器
+  const timer = setTimeout(() => {
+    handleTurnTimeout(roomId);
+  }, TURN_TIME_LIMIT);
+  
+  roomTimers.set(roomId, { timer, startTime });
+}
+
+/**
+ * 清除回合计时器
+ */
+function clearTurnTimer(roomId) {
+  const timerData = roomTimers.get(roomId);
+  if (timerData) {
+    clearTimeout(timerData.timer);
+    roomTimers.delete(roomId);
+  }
+}
+
+/**
+ * 处理回合超时 - 随机落子
+ */
+function handleTurnTimeout(roomId) {
+  const room = roomManager.getRoom(roomId);
+  if (!room || room.status !== 'playing' || room.winner) return;
+  
+  // 找到所有空位
+  const emptyPositions = [];
+  for (let x = 0; x < 15; x++) {
+    for (let y = 0; y < 15; y++) {
+      if (room.board[x][y] === 0) {
+        emptyPositions.push({ x, y });
+      }
+    }
+  }
+  
+  if (emptyPositions.length === 0) return;
+  
+  // 随机选择一个空位
+  const randomPos = emptyPositions[Math.floor(Math.random() * emptyPositions.length)];
+  
+  // 获取当前回合玩家的 socketId
+  const currentPlayer = room.currentTurn === 1 ? room.players.black : room.players.white;
+  if (!currentPlayer) return;
+  
+  // 执行落子
+  const result = placeStone(room, currentPlayer.socketId, randomPos.x, randomPos.y);
+  
+  if (result.success) {
+    // 广播超时自动落子
+    io.to(roomId).emit('timeout-auto-place', { 
+      x: randomPos.x, 
+      y: randomPos.y, 
+      color: room.board[randomPos.x][randomPos.y] 
+    });
+    
+    // 广播落子
+    io.to(roomId).emit('stone-placed', { 
+      x: randomPos.x, 
+      y: randomPos.y, 
+      color: room.board[randomPos.x][randomPos.y] 
+    });
+    
+    // 如果游戏结束
+    if (result.winner) {
+      clearTurnTimer(roomId);
+      io.to(roomId).emit('game-over', {
+        winner: result.winner,
+        winningStones: result.winningStones
+      });
+      broadcastRoomList();
+    } else {
+      // 启动下一回合计时器
+      startTurnTimer(roomId);
+    }
+    
+    broadcastRoomUpdate(roomId);
+    console.log(`[超时] 房间 ${roomId} 自动落子 (${randomPos.x}, ${randomPos.y})`);
   }
 }
 
@@ -146,10 +251,17 @@ io.on('connection', (socket) => {
         user.currentRoom = waitingRoom.id;
         socket.join(waitingRoom.id);
         
+        const room = roomManager.getRoom(waitingRoom.id);
+        
         socket.emit('room-joined', {
-          room: serializeForClient(waitingRoom, socket.id),
+          room: serializeForClient(room, socket.id),
           role: result.role
         });
+        
+        // 游戏开始，启动计时器
+        if (room.status === 'playing') {
+          startTurnTimer(waitingRoom.id);
+        }
         
         broadcastRoomUpdate(waitingRoom.id);
         broadcastRoomList();
@@ -184,6 +296,9 @@ io.on('connection', (socket) => {
       return;
     }
     
+    const roomBefore = roomManager.getRoom(roomId);
+    const wasWaiting = roomBefore && roomBefore.status === 'waiting';
+    
     const result = roomManager.joinRoom(roomId, {
       socketId: socket.id,
       nickname: user.nickname
@@ -207,6 +322,11 @@ io.on('connection', (socket) => {
     // 通知房间内其他人
     socket.to(roomId).emit('player-joined', { nickname: user.nickname, role: result.role });
     
+    // 如果游戏刚开始（从等待变为进行中），启动计时器
+    if (wasWaiting && room.status === 'playing') {
+      startTurnTimer(roomId);
+    }
+    
     broadcastRoomUpdate(roomId);
     broadcastRoomList();
     console.log(`[房间] ${user.nickname} 加入房间 ${roomId} 作为 ${result.role}`);
@@ -223,6 +343,12 @@ io.on('connection', (socket) => {
       socket.leave(roomId);
       user.currentRoom = null;
       lobbyUsers.add(socket.id);
+      
+      // 清除计时器（如果房间游戏结束）
+      const room = roomManager.getRoom(roomId);
+      if (!room || room.status !== 'playing') {
+        clearTurnTimer(roomId);
+      }
       
       // 通知房间内其他人
       socket.to(roomId).emit('player-left', { nickname: result.nickname });
@@ -255,11 +381,15 @@ io.on('connection', (socket) => {
     
     // 如果游戏结束
     if (result.winner) {
+      clearTurnTimer(roomId);
       io.to(roomId).emit('game-over', {
         winner: result.winner,
         winningStones: result.winningStones
       });
       broadcastRoomList();
+    } else {
+      // 启动下一回合计时器
+      startTurnTimer(roomId);
     }
     
     broadcastRoomUpdate(roomId);
@@ -324,6 +454,8 @@ io.on('connection', (socket) => {
       return;
     }
     
+    clearTurnTimer(roomId);
+    
     io.to(roomId).emit('game-over', {
       winner: result.winner,
       winningStones: null,
@@ -374,11 +506,14 @@ io.on('connection', (socket) => {
     
     if (result.bothReady) {
       // 双方都准备好了，开始新游戏
-      const room = roomManager.getRoom(roomId);
       io.to(roomId).emit('rematch-start', { 
         swapped: result.swapped,
         message: result.swapped ? '黑白棋已交换！' : '新游戏开始！'
       });
+      
+      // 启动计时器
+      startTurnTimer(roomId);
+      
       broadcastRoomUpdate(roomId);
       broadcastRoomList();
       console.log(`[再来一局] 房间 ${roomId} 开始新游戏${result.swapped ? '（已交换黑白棋）' : ''}`);

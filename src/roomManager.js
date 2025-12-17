@@ -223,9 +223,9 @@ class RoomManager {
       if (room.status === 'playing') {
         room.winner = GameLogic.WHITE;
         room.status = 'ended';
-      } else {
-        room.status = 'waiting';
       }
+      // 重置房间状态，准备新游戏
+      this._resetRoomForNewGame(room);
       return { success: true, leftAs: 'black', nickname };
     }
     
@@ -237,9 +237,9 @@ class RoomManager {
       if (room.status === 'playing') {
         room.winner = GameLogic.BLACK;
         room.status = 'ended';
-      } else {
-        room.status = 'waiting';
       }
+      // 重置房间状态，准备新游戏
+      this._resetRoomForNewGame(room);
       return { success: true, leftAs: 'white', nickname };
     }
     
@@ -252,6 +252,20 @@ class RoomManager {
     }
     
     return { success: false };
+  }
+
+  /**
+   * 内部方法：重置房间状态准备新游戏
+   * @param {Room} room - 房间对象
+   */
+  _resetRoomForNewGame(room) {
+    // 清空棋盘
+    room.board = GameLogic.createEmptyBoard();
+    room.currentTurn = GameLogic.BLACK;
+    room.history = [];
+    room.winner = null;
+    room.status = 'waiting';
+    room.rematchRequests = { black: false, white: false };
   }
 
   /**

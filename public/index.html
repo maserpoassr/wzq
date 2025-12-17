@@ -292,6 +292,31 @@
       transition: all 0.3s;
     }
     .player-card.active .thinking-badge { opacity: 1; transform: translateY(0); }
+    
+    /* 倒计时样式 */
+    .timer-badge {
+      margin-left: auto;
+      min-width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent), #e6a800);
+      color: white;
+      font-weight: 700;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(214, 158, 46, 0.4);
+      animation: pulse 1s infinite;
+    }
+    .timer-badge.warning {
+      background: linear-gradient(135deg, var(--danger), #e53e3e);
+      box-shadow: 0 2px 8px rgba(245, 101, 101, 0.4);
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.05); }
+    }
 
     /* 棋盘容器 */
     .board-wrapper {
@@ -479,6 +504,7 @@
               <h4 class="p-name">等待加入...</h4>
               <div class="thinking-badge">思考中...</div>
             </div>
+            <div class="timer-badge" id="blackTimer" style="display: none;">30</div>
           </div>
 
           <div id="whitePlayer" class="player-card">
@@ -487,6 +513,7 @@
               <h4 class="p-name">等待加入...</h4>
               <div class="thinking-badge">思考中...</div>
             </div>
+            <div class="timer-badge" id="whiteTimer" style="display: none;">30</div>
           </div>
           
           <div style="margin-top: auto; font-size: 0.85rem; color: var(--text-sub);">
@@ -581,7 +608,10 @@
       winningStones: null,
       gameEnded: false,
       rematchRequested: false,
-      pendingRoomId: null
+      pendingRoomId: null,
+      turnTimer: null,
+      timeRemaining: 30,
+      hoverPos: null  // 鼠标悬停位置（预选框）
     };
 
     // ==================== DOM 元素 ====================
@@ -753,6 +783,52 @@
         ctx.moveTo(PADDING + start.x * CELL_SIZE, PADDING + start.y * CELL_SIZE);
         ctx.lineTo(PADDING + end.x * CELL_SIZE, PADDING + end.y * CELL_SIZE);
         ctx.stroke();
+      }
+      
+      // G. 绘制预选框（鼠标悬停位置）
+      if (state.hoverPos && state.currentRoom && state.currentRoom.status === 'playing' && state.myRole !== 'watcher') {
+        const { x, y } = state.hoverPos;
+        // 只在空位显示预选框
+        if (state.board && state.board[x][y] === 0) {
+          const px = PADDING + x * CELL_SIZE;
+          const py = PADDING + y * CELL_SIZE;
+          const r = CELL_SIZE * 0.42;
+          
+          // 判断当前是否是自己的回合
+          const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) ||
+                           (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
+          
+          if (isMyTurn) {
+            // 绘制半透明预选棋子
+            ctx.globalAlpha = 0.5;
+            const myColor = state.myRole === 'black' ? 1 : 2;
+            
+            const grad = ctx.createRadialGradient(px - r/3, py - r/3, r/10, px, py, r);
+            if (myColor === 1) {
+              grad.addColorStop(0, "#666");
+              grad.addColorStop(1, "#050505");
+            } else {
+              grad.addColorStop(0, "#fff");
+              grad.addColorStop(1, "#ccc");
+            }
+            
+            ctx.fillStyle = grad;
+            ctx.beginPath();
+            ctx.arc(px, py, r, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.globalAlpha = 1;
+          }
+          
+          // 绘制预选框边框
+          ctx.strokeStyle = isMyTurn ? "rgba(72, 187, 120, 0.8)" : "rgba(160, 160, 160, 0.5)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          ctx.arc(px, py, r + 2, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+        }
       }
     }
 
@@ -936,6 +1012,7 @@
         state.winningStones = winningStones;
         state.gameEnded = true;
         state.rematchRequested = false;
+        stopClientTimer();
         renderBoard();
         
         const winnerText = winner === 1 ? '黑棋' : '白棋';
@@ -989,6 +1066,61 @@
         showToast(message || '新对局开始');
         if (swapped) state.myRole = state.myRole === 'black' ? 'white' : 'black';
       });
+      
+      // 回合计时器事件
+      state.socket.on('turn-timer-start', ({ timeLimit, currentTurn }) => {
+        startClientTimer(timeLimit, currentTurn);
+      });
+      
+      state.socket.on('timeout-auto-place', ({ x, y, color }) => {
+        showToast('⏰ 超时自动落子');
+      });
+    }
+    
+    // 客户端计时器
+    function startClientTimer(timeLimit, currentTurn) {
+      // 清除旧计时器
+      if (state.turnTimer) {
+        clearInterval(state.turnTimer);
+      }
+      
+      state.timeRemaining = Math.floor(timeLimit / 1000);
+      
+      // 隐藏所有计时器
+      $('blackTimer').style.display = 'none';
+      $('whiteTimer').style.display = 'none';
+      
+      // 显示当前回合的计时器
+      const timerEl = currentTurn === 1 ? $('blackTimer') : $('whiteTimer');
+      timerEl.style.display = 'flex';
+      timerEl.textContent = state.timeRemaining;
+      timerEl.classList.remove('warning');
+      
+      // 启动倒计时
+      state.turnTimer = setInterval(() => {
+        state.timeRemaining--;
+        timerEl.textContent = state.timeRemaining;
+        
+        // 10秒以下显示警告
+        if (state.timeRemaining <= 10) {
+          timerEl.classList.add('warning');
+        }
+        
+        // 时间到
+        if (state.timeRemaining <= 0) {
+          clearInterval(state.turnTimer);
+          state.turnTimer = null;
+        }
+      }, 1000);
+    }
+    
+    function stopClientTimer() {
+      if (state.turnTimer) {
+        clearInterval(state.turnTimer);
+        state.turnTimer = null;
+      }
+      $('blackTimer').style.display = 'none';
+      $('whiteTimer').style.display = 'none';
     }
 
     function resetGameState() {
@@ -996,6 +1128,7 @@
       state.myRole = null;
       state.board = null;
       state.gameEnded = false;
+      stopClientTimer();
       document.querySelectorAll('.modal-overlay').forEach(el => el.classList.remove('active'));
       showView('lobbyView');
     }
@@ -1040,7 +1173,21 @@
 
     // 游戏内操作
     window.joinRoom = (id, asWatcher) => state.socket.emit('join-room', { roomId: id, asWatcher });
-    window.copyInviteLink = (roomId) => { /* 逻辑同前，略 */ };
+    window.copyInviteLink = (roomId) => {
+      const url = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast('📋 邀请链接已复制');
+      }).catch(() => {
+        // 降级方案
+        const input = document.createElement('input');
+        input.value = url;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+        showToast('📋 邀请链接已复制');
+      });
+    };
 
     $('leaveRoomBtn').onclick = () => {
       if(confirm('确定要离开房间吗？')) {
@@ -1092,6 +1239,38 @@
       if (!state.currentRoom || state.currentRoom.status !== 'playing' || state.myRole === 'watcher') return;
       const pos = getIntersection(e.clientX, e.clientY);
       if (pos) state.socket.emit('place-stone', { roomId: state.currentRoom.id, x: pos.x, y: pos.y });
+    };
+    
+    // Canvas 鼠标移动 - 预选框
+    canvas.onmousemove = (e) => {
+      if (!state.currentRoom || state.currentRoom.status !== 'playing' || state.myRole === 'watcher') {
+        if (state.hoverPos) {
+          state.hoverPos = null;
+          renderBoard();
+        }
+        return;
+      }
+      
+      const pos = getIntersection(e.clientX, e.clientY);
+      
+      // 只有位置变化时才重新渲染
+      if (pos) {
+        if (!state.hoverPos || state.hoverPos.x !== pos.x || state.hoverPos.y !== pos.y) {
+          state.hoverPos = pos;
+          renderBoard();
+        }
+      } else if (state.hoverPos) {
+        state.hoverPos = null;
+        renderBoard();
+      }
+    };
+    
+    // Canvas 鼠标离开 - 清除预选框
+    canvas.onmouseleave = () => {
+      if (state.hoverPos) {
+        state.hoverPos = null;
+        renderBoard();
+      }
     };
 
     // 初始化
