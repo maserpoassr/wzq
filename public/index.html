@@ -414,38 +414,299 @@
     .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
     /* ================= 响应式 ================= */
+    /* 平板设备 (768px - 1024px) */
     @media (max-width: 1024px) {
+      .container { padding: 1rem; }
+      
       .game-layout {
         grid-template-columns: 1fr;
         grid-template-rows: auto auto auto;
         gap: 1rem;
       }
       .board-wrapper { order: 1; }
-      .side-panel:nth-child(1) { order: 0; flex-direction: row; justify-content: space-between; padding: 1rem; }
+      .side-panel:nth-child(1) { 
+        order: 0; 
+        flex-direction: row; 
+        justify-content: space-between; 
+        padding: 1rem;
+        gap: 1rem;
+      }
       .side-panel:nth-child(3) { order: 2; }
       
-      .player-card { flex: 1; justify-content: center; padding: 0.5rem; }
-      .avatar-stone { width: 30px; height: 30px; }
+      .player-card { 
+        flex: 1; 
+        justify-content: center; 
+        padding: 0.8rem;
+        min-width: 0;
+      }
+      .avatar-stone { width: 35px; height: 35px; flex-shrink: 0; }
       .thinking-badge { display: none; }
+      .timer-badge { min-width: 35px; height: 35px; font-size: 0.9rem; }
+      
+      .chat-box { min-height: 200px; }
+      .chat-history { max-height: 150px; }
     }
     
-    @media (max-width: 600px) {
-      .header h1 { font-size: 1.2rem; }
+    /* 手机设备 (小于768px) */
+    @media (max-width: 768px) {
+      .header { padding: 1rem; }
+      .header h1 { font-size: 1.4rem; }
       .online-badge { padding: 0.3rem 0.8rem; font-size: 0.8rem; }
       
-      .side-panel:nth-child(1) { flex-direction: row; gap: 0.5rem; }
-      .player-info h4 { font-size: 0.8rem; }
-      .panel-header { display: none; }
+      .container { padding: 0.8rem; }
       
-      .room-grid { grid-template-columns: 1fr; }
-      .nickname-input-group { flex-direction: column; align-items: stretch; }
-      input[type="text"] { width: 100%; }
+      /* 大厅样式 */
+      .lobby-container { margin: 1rem auto; }
+      .welcome-card { padding: 2rem 1.5rem; }
+      .welcome-card h2 { font-size: 1.3rem; }
+      .nickname-input-group { 
+        flex-direction: column; 
+        align-items: stretch;
+        gap: 0.8rem;
+      }
+      input[type="text"] { width: 100%; font-size: 16px; } /* 16px防止iOS缩放 */
       
-      .game-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
+      .action-bar { 
+        flex-direction: column;
+        gap: 0.8rem;
+      }
+      .action-bar .btn { width: 100%; }
+      #refreshBtn { margin-left: 0 !important; }
+      
+      .room-grid { grid-template-columns: 1fr; gap: 1rem; }
+      .room-card { padding: 1.2rem; }
+      
+      /* 游戏视图 */
+      .game-layout { gap: 0.8rem; }
+      
+      .side-panel:nth-child(1) { 
+        flex-direction: row; 
+        gap: 0.5rem;
+        padding: 0.8rem;
+        border-radius: 15px;
+      }
+      .side-panel:nth-child(3) {
+        padding: 1rem;
+        border-radius: 15px;
+      }
+      
+      .panel-header { 
+        font-size: 1rem;
+        display: block;
+        margin-bottom: 0.3rem;
+      }
+      
+      .player-card { 
+        padding: 0.6rem;
+        border-radius: 10px;
         gap: 0.5rem;
       }
+      .avatar-stone { width: 28px; height: 28px; }
+      .player-info h4 { font-size: 0.75rem; }
+      .timer-badge { 
+        min-width: 30px; 
+        height: 30px; 
+        font-size: 0.8rem;
+      }
+      
+      /* 房间信息隐藏在手机上 */
+      .side-panel:nth-child(1) > div:first-of-type:not(.player-card) {
+        display: none;
+      }
+      .side-panel:nth-child(1) .panel-header { display: none; }
+      
+      /* 观战者信息 */
+      .side-panel:nth-child(1) > div:last-child:not(.player-card) {
+        display: none;
+      }
+      
+      /* 游戏操作按钮 */
+      .game-actions {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+      }
+      .game-actions .btn {
+        padding: 0.5rem 0.3rem;
+        font-size: 0.8rem;
+      }
+      #leaveRoomBtn { 
+        grid-column: 1 / -1;
+        width: 100%;
+      }
+      
+      /* 聊天框 */
+      .chat-box { min-height: 150px; margin-top: 1rem; }
+      .chat-history { 
+        max-height: 120px; 
+        padding: 0.6rem;
+        font-size: 0.85rem;
+      }
+      .chat-input-area input { 
+        font-size: 16px; /* 防止iOS缩放 */
+        padding: 0.5rem;
+      }
+      .chat-input-area .btn { padding: 0.5rem 0.8rem; }
+      
+      /* 弹窗 */
+      .modal { 
+        padding: 1.5rem; 
+        width: 92%;
+        border-radius: 16px;
+      }
+      .modal h2 { font-size: 1.3rem; }
+      .modal p { font-size: 0.9rem; margin-bottom: 1.2rem; }
+      .result-icon { font-size: 2.5rem; }
+      
+      /* Toast */
+      .toast {
+        bottom: 20px;
+        padding: 0.6rem 1.2rem;
+        font-size: 0.85rem;
+        max-width: 90%;
+      }
+    }
+    
+    /* 小屏手机 (小于480px) */
+    @media (max-width: 480px) {
+      .header { padding: 0.8rem; }
+      .header h1 { font-size: 1.2rem; }
+      
+      .container { padding: 0.5rem; }
+      
+      .welcome-card { padding: 1.5rem 1rem; }
+      .welcome-card h2 { font-size: 1.1rem; }
+      .welcome-card p { font-size: 0.85rem; }
+      
+      .btn { 
+        padding: 0.7rem 1rem; 
+        font-size: 0.9rem;
+      }
+      
+      .game-layout { gap: 0.5rem; }
+      
+      .side-panel:nth-child(1) { 
+        padding: 0.6rem;
+        gap: 0.4rem;
+      }
+      .side-panel:nth-child(3) { padding: 0.8rem; }
+      
+      .player-card { 
+        padding: 0.5rem;
+        gap: 0.4rem;
+      }
+      .avatar-stone { width: 24px; height: 24px; }
+      .player-info h4 { font-size: 0.7rem; }
+      .timer-badge { 
+        min-width: 26px; 
+        height: 26px; 
+        font-size: 0.75rem;
+      }
+      
+      .game-actions .btn {
+        padding: 0.45rem 0.2rem;
+        font-size: 0.75rem;
+      }
+      
+      .chat-history { 
+        max-height: 100px;
+        font-size: 0.8rem;
+      }
+      
+      .modal { padding: 1.2rem; }
+      .modal h2 { font-size: 1.2rem; }
+    }
+    
+    /* 横屏手机优化 */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .header { padding: 0.5rem 1rem; }
+      .header h1 { font-size: 1.1rem; }
+      
+      .container { padding: 0.5rem; }
+      
+      .game-layout {
+        grid-template-columns: 200px 1fr 200px;
+        grid-template-rows: 1fr;
+        gap: 0.5rem;
+        height: calc(100vh - 60px);
+      }
+      
+      .board-wrapper { order: 1; padding: 0.5rem; }
+      .side-panel:nth-child(1) { 
+        order: 0; 
+        flex-direction: column;
+        padding: 0.5rem;
+        gap: 0.5rem;
+      }
+      .side-panel:nth-child(3) { 
+        order: 2;
+        padding: 0.5rem;
+      }
+      
+      .player-card { padding: 0.4rem; }
+      .avatar-stone { width: 24px; height: 24px; }
+      .player-info h4 { font-size: 0.7rem; }
+      
+      .panel-header { font-size: 0.85rem; display: block; }
+      
+      .chat-box { min-height: auto; flex: 1; }
+      .chat-history { max-height: 80px; }
+      
+      .game-actions .btn { padding: 0.4rem; font-size: 0.7rem; }
+    }
+    
+    /* 触摸设备优化 */
+    @media (hover: none) and (pointer: coarse) {
+      .btn { 
+        min-height: 44px; /* iOS推荐的最小触摸目标 */
+      }
+      .btn:hover {
+        transform: none;
+        filter: none;
+      }
+      .btn:active {
+        transform: scale(0.96);
+      }
+      
+      .room-card:hover {
+        transform: none;
+      }
+      
+      /* 增大触摸区域 */
+      .chat-input-area input {
+        min-height: 44px;
+      }
+    }
+    
+    /* 移动端JS检测类 */
+    body.is-mobile .thinking-badge {
+      display: none;
+    }
+    
+    /* 安全区域适配 (iPhone X等刘海屏) */
+    @supports (padding: max(0px)) {
+      .header {
+        padding-left: max(1.5rem, env(safe-area-inset-left));
+        padding-right: max(1.5rem, env(safe-area-inset-right));
+        padding-top: max(1rem, env(safe-area-inset-top));
+      }
+      .container {
+        padding-left: max(1rem, env(safe-area-inset-left));
+        padding-right: max(1rem, env(safe-area-inset-right));
+      }
+      .toast {
+        bottom: max(30px, calc(env(safe-area-inset-bottom) + 10px));
+      }
+    }
+    
+    /* 防止iOS双击缩放 */
+    * {
+      touch-action: manipulation;
+    }
+    
+    /* 棋盘触摸优化 */
+    canvas {
+      touch-action: none;
     }
   </style>
 </head>
@@ -686,13 +947,37 @@
 
     // 2. 核心 Canvas 渲染 (高清木纹 + 3D棋子)
     const BOARD_SIZE = 15;
-    const PADDING = 30;
+    let PADDING = 30;
     let CELL_SIZE = 30;
 
     function resizeBoard() {
-      // 响应式计算
+      // 响应式计算 - 考虑容器宽度和视口高度
       const containerW = canvas.parentElement.clientWidth;
-      const size = Math.min(containerW, 550); // 最大550px
+      const viewportH = window.innerHeight;
+      const viewportW = window.innerWidth;
+      
+      // 根据屏幕大小动态调整最大尺寸
+      let maxSize = 550;
+      if (viewportW <= 480) {
+        maxSize = Math.min(viewportW - 20, viewportH * 0.5); // 小屏手机
+        PADDING = 20;
+      } else if (viewportW <= 768) {
+        maxSize = Math.min(viewportW - 30, viewportH * 0.55); // 手机
+        PADDING = 25;
+      } else if (viewportW <= 1024) {
+        maxSize = Math.min(500, viewportH * 0.6); // 平板
+        PADDING = 28;
+      } else {
+        PADDING = 30; // 电脑
+      }
+      
+      // 横屏模式特殊处理
+      if (viewportW > viewportH && viewportH < 500) {
+        maxSize = Math.min(viewportH - 80, 400);
+        PADDING = 20;
+      }
+      
+      const size = Math.min(containerW - 10, maxSize);
       
       // 处理高DPI屏幕 (Retina)
       const dpr = window.devicePixelRatio || 1;
@@ -701,6 +986,8 @@
       canvas.style.width = size + 'px';
       canvas.style.height = size + 'px';
       
+      // 重置变换矩阵再缩放
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.scale(dpr, dpr);
       
       CELL_SIZE = (size - PADDING * 2) / (BOARD_SIZE - 1);
@@ -1329,7 +1616,19 @@
 
     // 初始化
     initSocket();
+    
+    // 响应式监听
     window.addEventListener('resize', resizeBoard);
+    window.addEventListener('orientationchange', () => {
+      // 延迟执行以确保方向变化完成
+      setTimeout(resizeBoard, 100);
+    });
+    
+    // 检测设备类型
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    if (isMobile) {
+      document.body.classList.add('is-mobile');
+    }
     
     // URL 参数检查
     const urlParams = new URLSearchParams(window.location.search);
