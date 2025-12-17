@@ -1,5 +1,5 @@
 module.exports = {
-  testEnvironment: 'node',
+  testEnvironment: 'jsdom',
   testMatch: [
     '**/tests/**/*.test.js',
     '**/tests/**/*.property.test.js'
@@ -9,5 +9,6 @@ module.exports = {
     '!src/**/*.test.js'
   ],
   coverageDirectory: 'coverage',
-  verbose: true
+  verbose: true,
+  setupFilesAfterEnv: ['<rootDir>/jest.setup.js']
 };
