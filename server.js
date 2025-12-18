@@ -573,7 +573,95 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chat-received', chatMessage);
   });
   
-  // 请求再来一局
+  // 重置房间（单方即可重置，等待新对手）
+  socket.on('reset-room', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    // 检查是否是房间内的玩家
+    const isBlack = room.players.black?.socketId === socket.id;
+    const isWhite = room.players.white?.socketId === socket.id;
+    
+    if (!isBlack && !isWhite) {
+      socket.emit('error', { message: '您不是游戏玩家' });
+      return;
+    }
+    
+    // 清除计时器
+    clearTurnTimer(roomId);
+    
+    // 重置房间状态
+    room.board = Array(15).fill(null).map(() => Array(15).fill(0));
+    room.history = [];
+    room.currentTurn = 1; // 黑棋先手
+    room.status = 'waiting'; // 设为等待状态
+    room.winner = null;
+    room.rematchRequests = [];
+    
+    // 保留请求者，移除对手
+    if (isBlack) {
+      // 如果白方还在，让白方离开
+      if (room.players.white) {
+        const whiteSocketId = room.players.white.socketId;
+        const whiteUser = onlineUsers.get(whiteSocketId);
+        if (whiteUser) {
+          // 通知白方房间已重置
+          io.to(whiteSocketId).emit('room-reset-by-opponent', {
+            message: '对方选择了再来一局，您已离开房间'
+          });
+          // 让白方离开房间
+          const whiteSocket = io.sockets.sockets.get(whiteSocketId);
+          if (whiteSocket) {
+            whiteSocket.leave(roomId);
+          }
+          whiteUser.currentRoom = null;
+          lobbyUsers.add(whiteSocketId);
+          io.to(whiteSocketId).emit('room-list', roomManager.getRoomList());
+        }
+        room.players.white = null;
+      }
+    } else {
+      // 如果黑方还在，让黑方离开，白方变成黑方
+      if (room.players.black) {
+        const blackSocketId = room.players.black.socketId;
+        const blackUser = onlineUsers.get(blackSocketId);
+        if (blackUser) {
+          io.to(blackSocketId).emit('room-reset-by-opponent', {
+            message: '对方选择了再来一局，您已离开房间'
+          });
+          const blackSocket = io.sockets.sockets.get(blackSocketId);
+          if (blackSocket) {
+            blackSocket.leave(roomId);
+          }
+          blackUser.currentRoom = null;
+          lobbyUsers.add(blackSocketId);
+          io.to(blackSocketId).emit('room-list', roomManager.getRoomList());
+        }
+      }
+      // 白方变成黑方
+      room.players.black = room.players.white;
+      room.players.white = null;
+    }
+    
+    // 通知请求者房间已重置
+    socket.emit('room-reset-success', {
+      message: '房间已重置，等待对手加入...'
+    });
+    
+    // 更新房间状态
+    broadcastRoomUpdate(roomId);
+    broadcastRoomList();
+    
+    console.log(`[重置房间] ${user.nickname} 重置了房间 ${roomId}`);
+  });
+  
+  // 请求再来一局（保留原有逻辑作为备用）
   socket.on('request-rematch', ({ roomId }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;

@@ -380,8 +380,8 @@
       border-radius: 50%; 
       border: 2px solid var(--primary); 
       border-top-color: transparent; 
-      -webkit-animation: spin 1s linear infinite;
-      animation: spin 1s linear infinite;
+      -webkit-animation: spin 3s ease-in-out infinite;
+      animation: spin 3s ease-in-out infinite;
     }
     @-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
     @keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
@@ -1174,11 +1174,17 @@
     state.socket.on('game-over', ({ winner, surrender }) => {
       stopClientTimer();
       state.isPlacingStone = false;
+      const isWinner = (winner === 1 && state.myRole === 'black') || (winner === 2 && state.myRole === 'white');
       const text = winner === 1 ? '黑棋获胜' : '白棋获胜';
-      const desc = surrender ? '对方已认输' : '五星连珠！';
+      const desc = surrender ? (isWinner ? '对方已认输' : '你已认输') : '五星连珠！';
       
       showModal(text, desc, [
-        { text: '再来一局', class: 'btn-primary', onClick: () => state.socket.emit('request-rematch', { roomId: state.currentRoom.id }), keepOpen: true },
+        { text: '再来一局', class: 'btn-primary', onClick: () => {
+          // 发送重置房间请求，单方即可重置
+          state.socket.emit('reset-room', { roomId: state.currentRoom.id });
+          closeModal();
+          showToast('房间已重置，等待对手加入...');
+        }},
         { text: '离开', class: 'btn-danger', onClick: () => leaveRoom() }
       ]);
     });
@@ -1234,6 +1240,17 @@
     // 错误处理
     state.socket.on('error', ({message}) => showToast(message || '发生错误'));
     state.socket.on('room-closed', () => { showToast('房间已解散'); leaveRoom(); });
+    
+    // 房间重置相关事件
+    state.socket.on('room-reset-by-opponent', ({ message }) => {
+      closeModal();
+      showToast(message || '对方选择了再来一局');
+      leaveRoom();
+    });
+    
+    state.socket.on('room-reset-success', ({ message }) => {
+      showToast(message || '房间已重置');
+    });
   }
 
   // HTML 转义函数
