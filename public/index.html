@@ -2,140 +2,711 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
+  <!-- 全面的移动端适配 meta 标签 -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="format-detection" content="telephone=no">
+  <meta name="theme-color" content="#1a1a1a">
+  <!-- IE/Edge 兼容性 -->
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>云弈 · ZEN GOMOKU</title>
+  <!-- 字体预加载优化 -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Noto+Serif+SC:wght@400;700&family=Lato:wght@400;700&display=swap" rel="stylesheet">
   <style>
-    /* ================= 1. 核心设计系统 ================= */
+    /* ================= 1. 核心设计系统 + 浏览器兼容性 ================= */
     :root {
       --bg-gradient: radial-gradient(circle at top right, #2c3e50 0%, #000000 100%);
       --glass-panel: rgba(30, 30, 30, 0.75);
       --glass-border: rgba(255, 255, 255, 0.1);
-      --primary: #c5a059; /* 黑金风格核心色 */
+      --primary: #c5a059;
       --text-main: #e0e0e0;
       --text-muted: #888888;
       --success: #27ae60;
       --danger: #c0392b;
+      /* 安全区域变量 (iPhone X+) */
+      --safe-area-top: env(safe-area-inset-top, 0px);
+      --safe-area-bottom: env(safe-area-inset-bottom, 0px);
+      --safe-area-left: env(safe-area-inset-left, 0px);
+      --safe-area-right: env(safe-area-inset-right, 0px);
     }
 
-    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    /* CSS Reset + 跨浏览器基础样式 */
+    *, *::before, *::after { 
+      margin: 0; padding: 0; 
+      box-sizing: border-box; 
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+    }
+
+    /* 滚动条样式 (Webkit) */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); }
+    ::-webkit-scrollbar-thumb { background: var(--primary); border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #d4af61; }
+
+    /* Firefox 滚动条 */
+    * { scrollbar-width: thin; scrollbar-color: var(--primary) rgba(0,0,0,0.2); }
+
+    html {
+      font-size: 16px;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
 
     body {
-      font-family: 'Lato', 'Noto Serif SC', sans-serif;
+      font-family: 'Lato', 'Noto Serif SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
       background: var(--bg-gradient);
+      background-attachment: fixed;
       color: var(--text-main);
-      height: 100vh;
+      min-height: 100vh;
+      min-height: -webkit-fill-available;
+      min-height: 100dvh; /* 动态视口高度 */
+      display: -webkit-box;
+      display: -ms-flexbox;
       display: flex;
+      -webkit-box-orient: vertical;
+      -webkit-box-direction: normal;
+      -ms-flex-direction: column;
       flex-direction: column;
       overflow: hidden;
+      /* 防止 iOS 橡皮筋效果 */
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      /* 安全区域适配 */
+      padding-top: var(--safe-area-top);
+      padding-bottom: var(--safe-area-bottom);
+      padding-left: var(--safe-area-left);
+      padding-right: var(--safe-area-right);
     }
     
-    /* 噪点纹理增加高级感 */
+    /* 噪点纹理 - 优化性能 */
     body::before {
-      content: ""; position: absolute; inset: 0; opacity: 0.05; pointer-events: none; z-index: 0;
+      content: ""; 
+      position: fixed; 
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0.05; 
+      pointer-events: none; 
+      z-index: 0;
       background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+      will-change: transform;
     }
 
-    .app-wrapper { position: relative; z-index: 1; display: flex; flex-direction: column; height: 100%; width: 100%; }
+    .app-wrapper { 
+      position: relative; 
+      z-index: 1; 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-orient: vertical;
+      -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+      flex-direction: column; 
+      height: 100%; 
+      width: 100%;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
 
-    /* ================= 2. 通用组件 ================= */
+    /* ================= 2. 通用组件 + 跨浏览器兼容 ================= */
     .glass-card {
       background: var(--glass-panel);
-      backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      /* 多浏览器 backdrop-filter 支持 */
+      -webkit-backdrop-filter: blur(20px);
+      backdrop-filter: blur(20px);
       border: 1px solid var(--glass-border);
       border-radius: 12px;
+      -webkit-box-shadow: 0 10px 30px rgba(0,0,0,0.3);
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
     }
 
-    .btn {
-      padding: 0.7rem 1.2rem; border: none; border-radius: 6px;
-      font-family: 'Cinzel', sans-serif; font-weight: 700; letter-spacing: 1px;
-      cursor: pointer; transition: all 0.2s; text-transform: uppercase; color: #fff;
-      display: inline-flex; align-items: center; justify-content: center; font-size: 0.85rem;
+    /* 不支持 backdrop-filter 的浏览器回退 */
+    @supports not ((-webkit-backdrop-filter: blur(20px)) or (backdrop-filter: blur(20px))) {
+      .glass-card {
+        background: rgba(30, 30, 30, 0.95);
+      }
     }
-    .btn:active { transform: scale(0.96); }
-    .btn-primary { background: linear-gradient(135deg, var(--primary) 0%, #a67c00 100%); color: #111; }
-    .btn-outline { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-main); }
-    .btn-danger { background: rgba(192, 57, 43, 0.2); border: 1px solid rgba(192, 57, 43, 0.5); color: #e74c3c; }
+
+    .btn {
+      padding: 0.7rem 1.2rem; 
+      border: none; 
+      border-radius: 6px;
+      font-family: 'Cinzel', serif; 
+      font-weight: 700; 
+      letter-spacing: 1px;
+      cursor: pointer; 
+      -webkit-transition: all 0.2s ease;
+      -o-transition: all 0.2s ease;
+      transition: all 0.2s ease; 
+      text-transform: uppercase; 
+      color: #fff;
+      display: -webkit-inline-box;
+      display: -ms-inline-flexbox;
+      display: inline-flex; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center; 
+      -webkit-box-pack: center;
+      -ms-flex-pack: center;
+      justify-content: center; 
+      font-size: 0.85rem;
+      /* 触摸优化 */
+      min-height: 44px;
+      min-width: 44px;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      /* 防止双击缩放 */
+      touch-action: manipulation;
+    }
+    .btn:active { 
+      -webkit-transform: scale(0.96); 
+      -ms-transform: scale(0.96); 
+      transform: scale(0.96); 
+    }
+    .btn:focus {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+    .btn-primary { 
+      background: -webkit-gradient(linear, left top, right bottom, from(var(--primary)), to(#a67c00));
+      background: -webkit-linear-gradient(top left, var(--primary) 0%, #a67c00 100%);
+      background: -o-linear-gradient(top left, var(--primary) 0%, #a67c00 100%);
+      background: linear-gradient(135deg, var(--primary) 0%, #a67c00 100%); 
+      color: #111; 
+    }
+    .btn-outline { 
+      background: transparent; 
+      border: 1px solid rgba(255,255,255,0.2); 
+      color: var(--text-main); 
+    }
+    .btn-danger { 
+      background: rgba(192, 57, 43, 0.2); 
+      border: 1px solid rgba(192, 57, 43, 0.5); 
+      color: #e74c3c; 
+    }
 
     input[type="text"] {
-      background: rgba(0, 0, 0, 0.3); border: 1px solid var(--glass-border);
-      color: white; padding: 0.8rem; border-radius: 6px; outline: none; width: 100%;
-      font-family: 'Noto Serif SC'; transition: 0.3s;
+      background: rgba(0, 0, 0, 0.3); 
+      border: 1px solid var(--glass-border);
+      color: white; 
+      padding: 0.8rem; 
+      border-radius: 6px; 
+      outline: none; 
+      width: 100%;
+      font-family: 'Noto Serif SC', serif; 
+      font-size: 16px; /* 防止 iOS 自动缩放 */
+      -webkit-transition: all 0.3s ease;
+      -o-transition: all 0.3s ease;
+      transition: all 0.3s ease;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+      min-height: 44px;
     }
-    input[type="text"]:focus { border-color: var(--primary); background: rgba(0,0,0,0.5); }
+    input[type="text"]:focus { 
+      border-color: var(--primary); 
+      background: rgba(0,0,0,0.5); 
+    }
+    input[type="text"]::-webkit-input-placeholder { color: var(--text-muted); }
+    input[type="text"]::-moz-placeholder { color: var(--text-muted); }
+    input[type="text"]:-ms-input-placeholder { color: var(--text-muted); }
+    input[type="text"]::placeholder { color: var(--text-muted); }
 
     /* ================= 3. 布局结构 ================= */
-    .header { padding: 0.8rem 1.5rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--glass-border); }
-    .brand { font-family: 'Cinzel', serif; font-size: 1.4rem; background: linear-gradient(to right, #fff, #ccc); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header { 
+      padding: 0.8rem 1.5rem; 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-pack: justify;
+      -ms-flex-pack: justify;
+      justify-content: space-between; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center; 
+      border-bottom: 1px solid var(--glass-border);
+      -ms-flex-negative: 0;
+      flex-shrink: 0;
+    }
+    .brand { 
+      font-family: 'Cinzel', serif; 
+      font-size: 1.4rem; 
+      background: -webkit-gradient(linear, left top, right top, from(#fff), to(#ccc));
+      background: -webkit-linear-gradient(left, #fff, #ccc);
+      background: -o-linear-gradient(left, #fff, #ccc);
+      background: linear-gradient(to right, #fff, #ccc); 
+      -webkit-background-clip: text;
+      background-clip: text; 
+      -webkit-text-fill-color: transparent;
+      color: #fff; /* 回退色 */
+    }
     
-    .view-container { flex: 1; position: relative; overflow: hidden; }
-    .view { position: absolute; inset: 0; opacity: 0; pointer-events: none; transition: opacity 0.3s; padding: 1rem; display: flex; flex-direction: column; overflow-y: auto; }
-    .view.active { opacity: 1; pointer-events: auto; z-index: 10; }
+    .view-container { 
+      -webkit-box-flex: 1;
+      -ms-flex: 1;
+      flex: 1; 
+      position: relative; 
+      overflow: hidden;
+      min-height: 0; /* 修复 flex 子元素溢出问题 */
+    }
+    .view { 
+      position: absolute; 
+      top: 0; left: 0; right: 0; bottom: 0;
+      opacity: 0; 
+      pointer-events: none; 
+      -webkit-transition: opacity 0.3s ease;
+      -o-transition: opacity 0.3s ease;
+      transition: opacity 0.3s ease; 
+      padding: 1rem; 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-orient: vertical;
+      -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+      flex-direction: column; 
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .view.active { 
+      opacity: 1; 
+      pointer-events: auto; 
+      z-index: 10; 
+    }
 
     /* 大厅视图 */
-    .lobby-center { max-width: 400px; margin: 10vh auto; text-align: center; width: 100%; }
-    .room-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; max-width: 1200px; margin: 1rem auto; width: 100%; }
-    .room-card { padding: 1.2rem; cursor: pointer; transition: all 0.3s; position: relative; overflow: hidden; }
-    .room-card:hover { border-color: var(--primary); transform: translateY(-2px); }
-    .room-status { font-size: 0.7rem; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; font-weight: bold; float: right; }
+    .lobby-center { 
+      max-width: 400px; 
+      margin: 10vh auto; 
+      text-align: center; 
+      width: 100%;
+      padding: 0 1rem;
+    }
+    .room-grid { 
+      display: -ms-grid;
+      display: grid; 
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); 
+      gap: 1rem; 
+      max-width: 1200px; 
+      margin: 1rem auto; 
+      width: 100%;
+      padding: 0 0.5rem;
+    }
+    .room-card { 
+      padding: 1.2rem; 
+      cursor: pointer; 
+      -webkit-transition: all 0.3s ease;
+      -o-transition: all 0.3s ease;
+      transition: all 0.3s ease; 
+      position: relative; 
+      overflow: hidden; 
+    }
+    .room-card:hover, .room-card:focus { 
+      border-color: var(--primary); 
+      -webkit-transform: translateY(-2px);
+      -ms-transform: translateY(-2px);
+      transform: translateY(-2px); 
+    }
+    .room-status { 
+      font-size: 0.7rem; 
+      padding: 2px 8px; 
+      border-radius: 4px; 
+      text-transform: uppercase; 
+      font-weight: bold; 
+      float: right; 
+    }
     .status-playing { color: var(--primary); background: rgba(197, 160, 89, 0.15); }
     .status-waiting { color: var(--success); background: rgba(39, 174, 96, 0.15); }
 
     /* 游戏视图 (Grid布局适配三栏) */
     .game-layout {
-      max-width: 1400px; margin: 0 auto; width: 100%; height: 100%;
-      display: grid; grid-template-columns: 260px 1fr 260px; gap: 1rem; align-items: center;
+      max-width: 1400px; 
+      margin: 0 auto; 
+      width: 100%; 
+      height: 100%;
+      display: -ms-grid;
+      display: grid; 
+      -ms-grid-columns: 260px 1rem 1fr 1rem 260px;
+      grid-template-columns: 260px 1fr 260px; 
+      gap: 1rem; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center;
+      padding: 0.5rem;
     }
     
     /* 玩家卡片 */
-    .player-card { padding: 1rem; display: flex; align-items: center; gap: 0.8rem; transition: 0.3s; border-left: 3px solid transparent; background: rgba(0,0,0,0.2); }
-    .player-card.active { background: linear-gradient(90deg, rgba(197,160,89,0.15), transparent); border-left-color: var(--primary); }
-    .avatar { width: 40px; height: 40px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); position: relative; flex-shrink: 0; }
-    .avatar.thinking::after {
-      content: ''; position: absolute; inset: -3px; border-radius: 50%; border: 2px solid var(--primary); border-top-color: transparent; animation: spin 1s linear infinite;
+    .player-card { 
+      padding: 1rem; 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center; 
+      gap: 0.8rem; 
+      -webkit-transition: all 0.3s ease;
+      -o-transition: all 0.3s ease;
+      transition: all 0.3s ease; 
+      border-left: 3px solid transparent; 
+      background: rgba(0,0,0,0.2); 
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    .player-card.active { 
+      background: -webkit-gradient(linear, left top, right top, from(rgba(197,160,89,0.15)), to(transparent));
+      background: -webkit-linear-gradient(left, rgba(197,160,89,0.15), transparent);
+      background: -o-linear-gradient(left, rgba(197,160,89,0.15), transparent);
+      background: linear-gradient(90deg, rgba(197,160,89,0.15), transparent); 
+      border-left-color: var(--primary); 
+    }
+    .avatar { 
+      width: 40px; 
+      height: 40px; 
+      border-radius: 50%; 
+      -webkit-box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5); 
+      position: relative; 
+      -ms-flex-negative: 0;
+      flex-shrink: 0; 
+    }
+    .avatar.thinking::after {
+      content: ''; 
+      position: absolute; 
+      top: -3px; left: -3px; right: -3px; bottom: -3px;
+      border-radius: 50%; 
+      border: 2px solid var(--primary); 
+      border-top-color: transparent; 
+      -webkit-animation: spin 1s linear infinite;
+      animation: spin 1s linear infinite;
+    }
+    @-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+    @keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
 
     /* 棋盘 */
-    .board-wrapper { display: flex; justify-content: center; align-items: center; position: relative; }
-    canvas { border-radius: 2px; box-shadow: 0 20px 50px rgba(0,0,0,0.5); cursor: crosshair; touch-action: none; }
-
-    /* 右侧控制面板 */
-    .control-panel { height: 100%; display: flex; flex-direction: column; overflow: hidden; }
-    .chat-box { flex: 1; background: rgba(0,0,0,0.2); border-radius: 6px; margin: 0.5rem 0; padding: 0.8rem; overflow-y: auto; font-size: 0.85rem; min-height: 150px; }
-    .msg { margin-bottom: 4px; color: #bbb; word-break: break-all; line-height: 1.4; }
-    .msg b { color: var(--primary); margin-right: 4px; }
-    
-    .btn-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem; margin-top: auto; }
-
-    /* ================= 4. 弹窗与Toast ================= */
-    /* 这是一个通用的弹窗容器，替代了原来代码中4个分开的 modal */
-    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.85); backdrop-filter: blur(4px); z-index: 100; display: none; justify-content: center; align-items: center; }
-    .modal-overlay.active { display: flex; animation: fadeIn 0.2s; }
-    .modal { background: #1a1a1a; border: 1px solid var(--glass-border); width: 90%; max-width: 360px; padding: 1.5rem; text-align: center; box-shadow: 0 0 30px rgba(197, 160, 89, 0.1); }
-    .modal h2 { font-family: 'Cinzel'; color: var(--primary); margin-bottom: 0.5rem; font-size: 1.5rem; }
-    
-    #toast {
-      position: fixed; top: 15%; left: 50%; transform: translateX(-50%);
-      background: var(--primary); color: #000; padding: 0.6rem 1.2rem; border-radius: 4px;
-      font-weight: bold; opacity: 0; pointer-events: none; transition: 0.3s; z-index: 200;
-      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    .board-wrapper { 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-pack: center;
+      -ms-flex-pack: center;
+      justify-content: center; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center; 
+      position: relative;
+      width: 100%;
+      max-width: 100%;
+    }
+    canvas { 
+      border-radius: 2px; 
+      -webkit-box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5); 
+      cursor: crosshair; 
+      touch-action: none;
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      /* 防止 canvas 模糊 */
+      image-rendering: -webkit-optimize-contrast;
+      image-rendering: crisp-edges;
     }
 
-    /* ================= 5. 移动端适配 ================= */
+    /* 右侧控制面板 */
+    .control-panel { 
+      height: 100%; 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-box-orient: vertical;
+      -webkit-box-direction: normal;
+      -ms-flex-direction: column;
+      flex-direction: column; 
+      overflow: hidden; 
+    }
+    .chat-box { 
+      -webkit-box-flex: 1;
+      -ms-flex: 1;
+      flex: 1; 
+      background: rgba(0,0,0,0.2); 
+      border-radius: 6px; 
+      margin: 0.5rem 0; 
+      padding: 0.8rem; 
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      font-size: 0.85rem; 
+      min-height: 100px;
+      max-height: 200px;
+    }
+    .msg { 
+      margin-bottom: 4px; 
+      color: #bbb; 
+      word-break: break-all; 
+      line-height: 1.4; 
+    }
+    .msg b { color: var(--primary); margin-right: 4px; }
+    
+    .btn-grid { 
+      display: -ms-grid;
+      display: grid; 
+      -ms-grid-columns: 1fr 0.5rem 1fr;
+      grid-template-columns: 1fr 1fr; 
+      gap: 0.5rem; 
+      margin-top: auto; 
+    }
+
+    /* ================= 4. 弹窗与Toast ================= */
+    .modal-overlay { 
+      position: fixed; 
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(0,0,0,0.85); 
+      -webkit-backdrop-filter: blur(4px);
+      backdrop-filter: blur(4px); 
+      z-index: 100; 
+      display: none; 
+      -webkit-box-pack: center;
+      -ms-flex-pack: center;
+      justify-content: center; 
+      -webkit-box-align: center;
+      -ms-flex-align: center;
+      align-items: center;
+      padding: var(--safe-area-top) var(--safe-area-right) var(--safe-area-bottom) var(--safe-area-left);
+    }
+    .modal-overlay.active { 
+      display: -webkit-box;
+      display: -ms-flexbox;
+      display: flex; 
+      -webkit-animation: fadeIn 0.2s ease;
+      animation: fadeIn 0.2s ease; 
+    }
+    @-webkit-keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    
+    .modal { 
+      background: #1a1a1a; 
+      border: 1px solid var(--glass-border); 
+      width: 90%; 
+      max-width: 360px; 
+      padding: 1.5rem; 
+      text-align: center; 
+      -webkit-box-shadow: 0 0 30px rgba(197, 160, 89, 0.1);
+      box-shadow: 0 0 30px rgba(197, 160, 89, 0.1);
+      border-radius: 12px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal h2 { 
+      font-family: 'Cinzel', serif; 
+      color: var(--primary); 
+      margin-bottom: 0.5rem; 
+      font-size: 1.5rem; 
+    }
+    
+    #toast {
+      position: fixed; 
+      top: 15%; 
+      left: 50%; 
+      -webkit-transform: translateX(-50%);
+      -ms-transform: translateX(-50%);
+      transform: translateX(-50%);
+      background: var(--primary); 
+      color: #000; 
+      padding: 0.6rem 1.2rem; 
+      border-radius: 4px;
+      font-weight: bold; 
+      opacity: 0; 
+      pointer-events: none; 
+      -webkit-transition: opacity 0.3s ease;
+      -o-transition: opacity 0.3s ease;
+      transition: opacity 0.3s ease; 
+      z-index: 200;
+      -webkit-box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+      max-width: 90%;
+      text-align: center;
+      word-break: break-word;
+    }
+
+    /* ================= 5. 响应式设计 - 多设备适配 ================= */
+    
+    /* 平板横屏 */
+    @media (max-width: 1200px) and (min-width: 769px) {
+      .game-layout { 
+        -ms-grid-columns: 220px 1rem 1fr 1rem 220px;
+        grid-template-columns: 220px 1fr 220px; 
+        gap: 0.8rem;
+      }
+      .player-card { padding: 0.8rem; }
+      .avatar { width: 35px; height: 35px; }
+    }
+
+    /* 平板竖屏和大手机 */
     @media (max-width: 1024px) {
       .header { padding: 0.6rem 1rem; }
-      .game-layout { grid-template-columns: 1fr; grid-template-rows: auto auto auto; gap: 0.5rem; padding-bottom: 1rem; }
-      .board-wrapper { order: 2; margin: 0.5rem 0; }
+      .game-layout { 
+        -ms-grid-columns: 1fr;
+        grid-template-columns: 1fr; 
+        -ms-grid-rows: auto auto auto;
+        grid-template-rows: auto auto auto; 
+        gap: 0.5rem; 
+        padding: 0.5rem;
+        padding-bottom: calc(1rem + var(--safe-area-bottom));
+        height: auto;
+        min-height: 100%;
+      }
+      .board-wrapper { 
+        -webkit-box-ordinal-group: 3;
+        -ms-flex-order: 2;
+        order: 2; 
+        margin: 0.5rem 0;
+        padding: 0 0.5rem;
+      }
       
-      /* 移动端将玩家信息放在一行显示 */
-      #mobilePlayerBar { order: 1; display: flex; gap: 0.5rem; }
-      .player-card { flex: 1; padding: 0.6rem; background: rgba(255,255,255,0.05); }
+      #mobilePlayerBar { 
+        -webkit-box-ordinal-group: 2;
+        -ms-flex-order: 1;
+        order: 1; 
+        display: -webkit-box;
+        display: -ms-flexbox;
+        display: flex; 
+        gap: 0.5rem;
+        padding: 0 0.5rem;
+      }
+      .player-card { 
+        -webkit-box-flex: 1;
+        -ms-flex: 1;
+        flex: 1; 
+        padding: 0.6rem; 
+        background: rgba(255,255,255,0.05); 
+      }
       .avatar { width: 30px; height: 30px; }
       
-      .control-panel { order: 3; max-height: 35vh; }
-      .chat-box { min-height: 100px; }
+      .control-panel { 
+        -webkit-box-ordinal-group: 4;
+        -ms-flex-order: 3;
+        order: 3; 
+        max-height: 35vh;
+        margin: 0 0.5rem;
+      }
+      .chat-box { min-height: 80px; max-height: 120px; }
+    }
+
+    /* 手机竖屏 */
+    @media (max-width: 768px) {
+      html { font-size: 14px; }
+      .header { padding: 0.5rem 0.8rem; }
+      .brand { font-size: 1.2rem; }
+      .lobby-center { margin: 5vh auto; }
+      .lobby-center h1 { font-size: 2rem; }
+      .room-grid { 
+        grid-template-columns: 1fr; 
+        gap: 0.8rem;
+      }
+      .game-layout { gap: 0.4rem; }
+      .control-panel { max-height: 40vh; }
+      .btn { 
+        padding: 0.6rem 1rem; 
+        font-size: 0.75rem;
+        min-height: 40px;
+      }
+      .btn-grid { gap: 0.4rem; }
+      .chat-box { 
+        min-height: 60px; 
+        max-height: 100px;
+        font-size: 0.8rem;
+      }
+    }
+
+    /* 小手机 */
+    @media (max-width: 375px) {
+      html { font-size: 13px; }
+      .header { padding: 0.4rem 0.6rem; }
+      .brand { font-size: 1rem; }
+      .lobby-center { margin: 3vh auto; padding: 0 0.5rem; }
+      .lobby-center h1 { font-size: 1.6rem; }
+      .player-card { padding: 0.4rem; gap: 0.4rem; }
+      .avatar { width: 24px; height: 24px; }
+      .control-panel { max-height: 45vh; }
+      .btn { 
+        padding: 0.5rem 0.8rem; 
+        font-size: 0.7rem;
+        min-height: 36px;
+      }
+    }
+
+    /* 横屏模式优化 */
+    @media (max-height: 500px) and (orientation: landscape) {
+      .lobby-center { margin: 2vh auto; }
+      .lobby-center h1 { font-size: 1.5rem; margin-bottom: 0.3rem; }
+      .lobby-center p { margin-bottom: 1rem; }
+      .game-layout {
+        -ms-grid-columns: 180px 0.5rem 1fr 0.5rem 180px;
+        grid-template-columns: 180px 1fr 180px;
+        -ms-grid-rows: 1fr;
+        grid-template-rows: 1fr;
+        gap: 0.5rem;
+        height: 100%;
+      }
+      #mobilePlayerBar {
+        -webkit-box-orient: vertical;
+        -webkit-box-direction: normal;
+        -ms-flex-direction: column;
+        flex-direction: column;
+        -webkit-box-ordinal-group: 1;
+        -ms-flex-order: 0;
+        order: 0;
+      }
+      .board-wrapper { 
+        -webkit-box-ordinal-group: 2;
+        -ms-flex-order: 1;
+        order: 1; 
+      }
+      .control-panel { 
+        -webkit-box-ordinal-group: 3;
+        -ms-flex-order: 2;
+        order: 2;
+        max-height: none;
+      }
+      .chat-box { max-height: 80px; }
+      .player-card { padding: 0.4rem; }
+      .avatar { width: 24px; height: 24px; }
+    }
+
+    /* 高分辨率屏幕 */
+    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+      .glass-card {
+        border-width: 0.5px;
+      }
+    }
+
+    /* 减少动画 (用户偏好) */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        -webkit-animation-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        -webkit-transition-duration: 0.01ms !important;
+        -o-transition-duration: 0.01ms !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    /* 深色模式支持 (已经是深色主题) */
+    @media (prefers-color-scheme: dark) {
+      :root {
+        color-scheme: dark;
+      }
+    }
+
+    /* 打印样式 */
+    @media print {
+      body { background: white; color: black; }
+      .glass-card { background: white; border: 1px solid #ccc; }
+      .btn { background: #eee; color: black; border: 1px solid #ccc; }
     }
   </style>
 </head>
@@ -156,15 +727,15 @@
         <h1 style="font-family:'Cinzel'; color:var(--primary); font-size:2.5rem; margin-bottom:0.5rem;">云 弈</h1>
         <p style="color:var(--text-muted); margin-bottom:2rem;">Strategy in Serenity</p>
         <div class="glass-card" style="padding: 2rem;">
-          <input type="text" id="nicknameInput" placeholder="输入你的代号" maxlength="12" style="text-align: center; margin-bottom: 1rem;">
+          <input type="text" id="nicknameInput" placeholder="输入你的代号" maxlength="12" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" style="text-align: center; margin-bottom: 1rem;">
           <button class="btn btn-primary" id="joinLobbyBtn" style="width: 100%;">进入大厅</button>
         </div>
       </div>
 
       <div id="lobbyContent" style="display: none; width: 100%;">
-        <div style="max-width: 1200px; margin: 0 auto; display: flex; justify-content: space-between; align-items: center; padding: 0.5rem;">
+        <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 0.5rem; gap: 0.5rem;">
           <h2 style="font-family:'Cinzel'; color:var(--text-main);">Lobby</h2>
-          <div style="display: flex; gap: 0.5rem;">
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
             <button class="btn btn-primary" id="createRoomBtn">＋ 创建</button>
             <button class="btn btn-outline" id="quickMatchBtn">⚡ 匹配</button>
             <button class="btn btn-outline" id="refreshBtn">↻ 刷新</button>
@@ -180,17 +751,17 @@
         <div id="mobilePlayerBar">
           <div class="player-card glass-card" id="blackPlayerPanel">
             <div class="avatar" style="background: radial-gradient(circle at 30% 30%, #444, #000);"></div>
-            <div style="flex:1; overflow:hidden;">
+            <div style="flex:1; overflow:hidden; min-width: 0;">
               <div style="font-size:0.7rem; color:var(--text-muted);">BLACK</div>
-              <div id="blackName" style="font-weight:bold; white-space:nowrap;">-</div>
+              <div id="blackName" style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">-</div>
               <div id="blackTimer" style="font-family:monospace; color:var(--primary);"></div>
             </div>
           </div>
           <div class="player-card glass-card" id="whitePlayerPanel">
             <div class="avatar" style="background: radial-gradient(circle at 30% 30%, #fff, #ccc);"></div>
-            <div style="flex:1; overflow:hidden;">
+            <div style="flex:1; overflow:hidden; min-width: 0;">
               <div style="font-size:0.7rem; color:var(--text-muted);">WHITE</div>
-              <div id="whiteName" style="font-weight:bold; white-space:nowrap;">-</div>
+              <div id="whiteName" style="font-weight:bold; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">-</div>
               <div id="whiteTimer" style="font-family:monospace; color:var(--primary);"></div>
             </div>
           </div>
@@ -201,15 +772,15 @@
         </div>
 
         <div class="glass-card control-panel" style="padding: 1rem;">
-          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem;">
-            <span>房间: <span id="roomIdDisplay">-</span></span>
+          <div style="display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 0.5rem; flex-wrap: wrap; gap: 0.3rem;">
+            <span>房间: <span id="roomIdDisplay" style="word-break: break-all;">-</span></span>
             <span id="roleDisplay" style="color: var(--primary)"></span>
           </div>
           
           <div class="chat-box" id="chatMessages"></div>
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
-            <input type="text" id="chatInput" placeholder="发送消息..." style="padding: 0.5rem;">
-            <button class="btn btn-primary" id="sendChatBtn" style="min-width: 40px;">➤</button>
+            <input type="text" id="chatInput" placeholder="发送消息..." autocomplete="off" style="padding: 0.5rem; flex: 1; min-width: 0;">
+            <button class="btn btn-primary" id="sendChatBtn" style="min-width: 44px; flex-shrink: 0;">➤</button>
           </div>
           
           <div class="btn-grid">
@@ -230,30 +801,38 @@
     <h2 id="modalTitle">标题</h2>
     <p id="modalDesc" style="color: #ccc; margin-bottom: 1.5rem; font-size: 0.9rem;">内容</p>
     <div id="modalInputArea" style="display: none; margin-bottom: 1rem;">
-        <input type="text" id="modalInput" style="text-align: center;">
+        <input type="text" id="modalInput" autocomplete="off" style="text-align: center;">
     </div>
-    <div id="modalActions" style="display: flex; gap: 1rem; justify-content: center;"></div>
+    <div id="modalActions" style="display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap;"></div>
   </div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="alert" aria-live="polite"></div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
-  // ==================== 0. 工具函数 ====================
+  // ==================== 0. 工具函数 + 浏览器兼容性 ====================
   const $ = id => document.getElementById(id);
   const canvas = $('board');
   const ctx = canvas.getContext('2d');
+  
+  // 检测设备类型
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/.test(navigator.userAgent);
+  const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
   
   // 简易的 Toast 提示
   function showToast(msg) {
     const t = $('toast');
     t.textContent = msg;
-    t.style.opacity = 1;
-    setTimeout(() => { t.style.opacity = 0; }, 2000);
+    t.style.opacity = '1';
+    // 清除之前的定时器
+    if (t._timeout) clearTimeout(t._timeout);
+    t._timeout = setTimeout(() => { t.style.opacity = '0'; }, 2500);
   }
 
-  // 通用弹窗函数：这一个函数替代了你原来的4个HTML模态框
+  // 通用弹窗函数
   function showModal(title, desc, actions = [], showInput = false) {
     $('modalTitle').textContent = title;
     $('modalDesc').textContent = desc;
@@ -261,12 +840,15 @@
     const inputArea = $('modalInputArea');
     const input = $('modalInput');
     inputArea.style.display = showInput ? 'block' : 'none';
-    if(showInput) input.value = '';
+    if(showInput) {
+      input.value = '';
+      // 延迟聚焦，避免 iOS 键盘问题
+      setTimeout(() => input.focus(), 100);
+    }
 
     const actionContainer = $('modalActions');
     actionContainer.innerHTML = '';
     
-    // 如果没有传入按钮，默认显示确定
     if (actions.length === 0) {
       actions = [{ text: '确定', class: 'btn-primary', onClick: () => closeModal() }];
     }
@@ -284,16 +866,24 @@
     });
     
     $('commonModal').classList.add('active');
+    // 防止背景滚动
+    document.body.style.overflow = 'hidden';
   }
 
   function closeModal() {
     $('commonModal').classList.remove('active');
+    document.body.style.overflow = '';
   }
 
   function switchView(id) {
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     $(id).classList.add('active');
-    if(id === 'gameView') setTimeout(resizeBoard, 100);
+    if(id === 'gameView') {
+      // 延迟调整棋盘大小，确保布局完成
+      requestAnimationFrame(() => {
+        setTimeout(resizeBoard, 50);
+      });
+    }
   }
 
   // ==================== 1. 状态管理 ====================
@@ -308,24 +898,47 @@
     boardSize: 15,
     cellSize: 0,
     padding: 0,
-    turnTimer: null,     // 计时器句柄
+    turnTimer: null,
     timeRemaining: 30,
-    pendingRoomId: null  // 邀请链接中的房间ID
+    pendingRoomId: null,
+    lastTouchTime: 0, // 防止双击缩放
+    isPlacingStone: false // 防止重复落子
   };
 
-  // ==================== 2. Canvas 渲染 (保留高级质感) ====================
+  // ==================== 2. Canvas 渲染 (跨设备优化) ====================
   function resizeBoard() {
     const container = canvas.parentElement;
-    const isMobile = window.innerWidth <= 768;
-    // 计算正方形大小
-    const size = Math.min(container.clientWidth, isMobile ? window.innerWidth - 20 : window.innerHeight * 0.65);
+    if (!container) return;
     
-    const dpr = window.devicePixelRatio || 1;
+    const containerWidth = container.clientWidth;
+    const containerHeight = container.clientHeight || window.innerHeight * 0.5;
+    
+    // 根据设备和方向计算最佳尺寸
+    const isLandscape = window.innerWidth > window.innerHeight;
+    const isMobile = window.innerWidth <= 768;
+    const isTablet = window.innerWidth <= 1024 && window.innerWidth > 768;
+    
+    let maxSize;
+    if (isMobile) {
+      maxSize = Math.min(containerWidth - 20, window.innerHeight * 0.45);
+    } else if (isTablet) {
+      maxSize = Math.min(containerWidth - 20, window.innerHeight * 0.55);
+    } else if (isLandscape && window.innerHeight < 600) {
+      maxSize = Math.min(containerWidth, window.innerHeight * 0.75);
+    } else {
+      maxSize = Math.min(containerWidth, window.innerHeight * 0.65);
+    }
+    
+    const size = Math.max(200, Math.floor(maxSize));
+    
+    // 高 DPI 支持
+    const dpr = Math.min(window.devicePixelRatio || 1, 3); // 限制最大 DPR
     canvas.width = size * dpr;
     canvas.height = size * dpr;
     canvas.style.width = size + 'px';
     canvas.style.height = size + 'px';
     
+    // 重置变换
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.scale(dpr, dpr);
     
@@ -336,8 +949,11 @@
   }
 
   function renderBoard() {
-    const width = parseFloat(canvas.style.width);
-    const height = parseFloat(canvas.style.height);
+    const width = parseFloat(canvas.style.width) || 300;
+    const height = parseFloat(canvas.style.height) || 300;
+
+    // 清除画布
+    ctx.clearRect(0, 0, width, height);
 
     // 木纹背景
     const grd = ctx.createLinearGradient(0, 0, width, height);
@@ -352,15 +968,18 @@
     ctx.strokeStyle = "#5d4037";
     for (let i = 0; i < state.boardSize; i++) {
       const pos = state.padding + i * state.cellSize;
-      ctx.moveTo(state.padding, pos); ctx.lineTo(width - state.padding, pos);
-      ctx.moveTo(pos, state.padding); ctx.lineTo(pos, height - state.padding);
+      ctx.moveTo(state.padding, pos); 
+      ctx.lineTo(width - state.padding, pos);
+      ctx.moveTo(pos, state.padding); 
+      ctx.lineTo(pos, height - state.padding);
     }
     ctx.stroke();
 
     // 星位
-    [3, 7, 11].forEach(r => [3, 7, 11].forEach(c => {
+    const starPoints = [3, 7, 11];
+    starPoints.forEach(r => starPoints.forEach(c => {
       ctx.beginPath();
-      ctx.arc(state.padding + c*state.cellSize, state.padding + r*state.cellSize, 3, 0, Math.PI*2);
+      ctx.arc(state.padding + c * state.cellSize, state.padding + r * state.cellSize, Math.max(2, state.cellSize * 0.1), 0, Math.PI * 2);
       ctx.fillStyle = "#5d4037";
       ctx.fill();
     }));
@@ -374,23 +993,28 @@
       }
     }
 
-    // 预选框 (仅当轮到自己且是空位时显示)
+    // 预选框
     if (state.hoverPos && state.myRole !== 'watcher' && state.currentRoom?.status === 'playing') {
        const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) || 
                         (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
-       if (isMyTurn && state.board[state.hoverPos.x][state.hoverPos.y] === 0) {
+       if (isMyTurn && state.board && state.board[state.hoverPos.x] && state.board[state.hoverPos.x][state.hoverPos.y] === 0) {
          drawSelection(state.hoverPos.x, state.hoverPos.y);
        }
     }
 
-    // 最后一手红色标记
+    // 最后一手标记
     if (state.lastMove) {
       const cx = state.padding + state.lastMove.x * state.cellSize;
       const cy = state.padding + state.lastMove.y * state.cellSize;
       ctx.fillStyle = "#c0392b";
-      ctx.beginPath(); ctx.arc(cx, cy, 3, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); 
+      ctx.arc(cx, cy, Math.max(2, state.cellSize * 0.1), 0, Math.PI * 2); 
+      ctx.fill();
       ctx.strokeStyle = "rgba(192, 57, 43, 0.8)";
-      ctx.beginPath(); ctx.arc(cx, cy, state.cellSize * 0.3, 0, Math.PI*2); ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.beginPath(); 
+      ctx.arc(cx, cy, state.cellSize * 0.3, 0, Math.PI * 2); 
+      ctx.stroke();
     }
   }
 
@@ -401,21 +1025,31 @@
     
     ctx.save();
     // 阴影
-    ctx.shadowColor = "rgba(0,0,0,0.4)"; ctx.shadowBlur = 4; ctx.shadowOffsetX = 2; ctx.shadowOffsetY = 2;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); 
+    ctx.shadowColor = "rgba(0,0,0,0.4)"; 
+    ctx.shadowBlur = Math.max(2, r * 0.2); 
+    ctx.shadowOffsetX = 2; 
+    ctx.shadowOffsetY = 2;
+    ctx.beginPath(); 
+    ctx.arc(cx, cy, r, 0, Math.PI * 2); 
     ctx.fillStyle = color === 1 ? "#000" : "#fff"; 
     ctx.fill();
     ctx.shadowColor = "transparent";
 
     // 3D 质感渐变
-    const grad = ctx.createRadialGradient(cx - r*0.3, cy - r*0.3, r*0.1, cx, cy, r);
-    if (color === 1) { // 黑子
-      grad.addColorStop(0, "#666"); grad.addColorStop(0.3, "#222"); grad.addColorStop(1, "#000");
-    } else { // 白子
-      grad.addColorStop(0, "#fff"); grad.addColorStop(0.3, "#f0f0f0"); grad.addColorStop(1, "#ccc");
+    const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.1, cx, cy, r);
+    if (color === 1) {
+      grad.addColorStop(0, "#666"); 
+      grad.addColorStop(0.3, "#222"); 
+      grad.addColorStop(1, "#000");
+    } else {
+      grad.addColorStop(0, "#fff"); 
+      grad.addColorStop(0.3, "#f0f0f0"); 
+      grad.addColorStop(1, "#ccc");
     }
     ctx.fillStyle = grad;
-    ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); 
+    ctx.arc(cx, cy, r, 0, Math.PI * 2); 
+    ctx.fill();
     ctx.restore();
   }
 
@@ -423,48 +1057,78 @@
     const cx = state.padding + x * state.cellSize;
     const cy = state.padding + y * state.cellSize;
     const size = state.cellSize * 0.4;
+    const corner = Math.max(3, size * 0.3);
+    
     ctx.strokeStyle = "rgba(197, 160, 89, 0.8)";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    // 画四个角
-    ctx.moveTo(cx-size, cy-size+5); ctx.lineTo(cx-size, cy-size); ctx.lineTo(cx-size+5, cy-size);
-    ctx.moveTo(cx+size-5, cy-size); ctx.lineTo(cx+size, cy-size); ctx.lineTo(cx+size, cy-size+5);
-    ctx.moveTo(cx+size, cy+size-5); ctx.lineTo(cx+size, cy+size); ctx.lineTo(cx+size-5, cy+size);
-    ctx.moveTo(cx-size+5, cy+size); ctx.lineTo(cx-size, cy+size); ctx.lineTo(cx-size, cy+size-5);
+    // 四个角
+    ctx.moveTo(cx - size, cy - size + corner); ctx.lineTo(cx - size, cy - size); ctx.lineTo(cx - size + corner, cy - size);
+    ctx.moveTo(cx + size - corner, cy - size); ctx.lineTo(cx + size, cy - size); ctx.lineTo(cx + size, cy - size + corner);
+    ctx.moveTo(cx + size, cy + size - corner); ctx.lineTo(cx + size, cy + size); ctx.lineTo(cx + size - corner, cy + size);
+    ctx.moveTo(cx - size + corner, cy + size); ctx.lineTo(cx - size, cy + size); ctx.lineTo(cx - size, cy + size - corner);
     ctx.stroke();
   }
 
-  // ==================== 3. 逻辑交互 ====================
+  // ==================== 3. Socket.IO 逻辑交互 ====================
   function initSocket() {
-    state.socket = io();
+    // Socket.IO 连接配置
+    state.socket = io({
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+      timeout: 20000
+    });
 
     state.socket.on('connect', () => {
       const saved = localStorage.getItem('gomoku_nick');
       if (saved) $('nicknameInput').value = saved;
+      showToast('已连接服务器');
+    });
+
+    state.socket.on('disconnect', () => {
+      showToast('连接已断开，正在重连...');
+    });
+
+    state.socket.on('reconnect', () => {
+      showToast('重新连接成功');
+      // 如果在房间中，尝试重新加入
+      if (state.currentRoom && state.nickname) {
+        state.socket.emit('rejoin-room', { 
+          roomId: state.currentRoom.id, 
+          nickname: state.nickname 
+        });
+      }
     });
     
     // 1. 在线人数
-    state.socket.on('online-count', ({count}) => $('onlineCount').textContent = count);
+    state.socket.on('online-count', ({count}) => {
+      $('onlineCount').textContent = count;
+    });
     
     // 2. 房间列表更新
     state.socket.on('room-list', (rooms) => {
       const grid = $('roomListGrid');
-      if (rooms.length === 0) {
+      if (!rooms || rooms.length === 0) {
         grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:var(--text-muted); padding:2rem;">暂无房间，创建一个吧！</div>';
         return;
       }
       grid.innerHTML = rooms.map(room => {
         const isFull = room.blackPlayer && room.whitePlayer;
         const canJoin = room.status === 'waiting' && !isFull;
+        // 转义 HTML 防止 XSS
+        const safeName = escapeHtml(room.name);
+        const safeBlack = escapeHtml(room.blackPlayer || '空位');
+        const safeWhite = escapeHtml(room.whitePlayer || '空位');
         return `
-        <div class="glass-card room-card">
+        <div class="glass-card room-card" tabindex="0" role="button" aria-label="房间 ${safeName}">
           <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-            <span style="font-weight:bold; color:var(--text-main); font-family:'Cinzel'">${room.name}</span>
+            <span style="font-weight:bold; color:var(--text-main); font-family:'Cinzel'; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%;">${safeName}</span>
             <span class="room-status ${room.status === 'playing' ? 'status-playing' : 'status-waiting'}">${room.status}</span>
           </div>
           <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.8rem;">
-            <div>⚫ ${room.blackPlayer || '空位'}</div>
-            <div>⚪ ${room.whitePlayer || '空位'}</div>
+            <div>⚫ ${safeBlack}</div>
+            <div>⚪ ${safeWhite}</div>
             <div style="margin-top:0.3rem;">👁 观战: ${room.watcherCount || 0}</div>
           </div>
           <div style="display:flex; gap:0.5rem;">
@@ -480,7 +1144,7 @@
       state.currentRoom = room;
       state.myRole = role;
       state.board = room.board;
-      state.lastMove = room.history.length ? room.history[room.history.length-1] : null;
+      state.lastMove = room.history && room.history.length ? room.history[room.history.length - 1] : null;
       
       switchView('gameView');
       updateGameUI();
@@ -490,7 +1154,8 @@
     state.socket.on('room-updated', (room) => {
       state.currentRoom = room;
       state.board = room.board;
-      state.lastMove = room.history.length ? room.history[room.history.length-1] : null;
+      state.lastMove = room.history && room.history.length ? room.history[room.history.length - 1] : null;
+      state.isPlacingStone = false;
       updateGameUI();
       renderBoard();
     });
@@ -500,6 +1165,7 @@
       if(state.board) {
         state.board[x][y] = color;
         state.lastMove = {x, y};
+        state.isPlacingStone = false;
         renderBoard();
       }
     });
@@ -507,6 +1173,7 @@
     // 6. 游戏结束
     state.socket.on('game-over', ({ winner, surrender }) => {
       stopClientTimer();
+      state.isPlacingStone = false;
       const text = winner === 1 ? '黑棋获胜' : '白棋获胜';
       const desc = surrender ? '对方已认输' : '五星连珠！';
       
@@ -519,7 +1186,9 @@
     // 7. 聊天消息
     state.socket.on('chat-received', ({ nickname, message }) => {
       const box = $('chatMessages');
-      box.innerHTML += `<div class="msg"><b>${nickname}:</b>${message}</div>`;
+      const safeNick = escapeHtml(nickname);
+      const safeMsg = escapeHtml(message);
+      box.innerHTML += `<div class="msg"><b>${safeNick}:</b>${safeMsg}</div>`;
       box.scrollTop = box.scrollHeight;
     });
 
@@ -563,23 +1232,38 @@
     });
 
     // 错误处理
-    state.socket.on('error', ({message}) => showToast(message));
+    state.socket.on('error', ({message}) => showToast(message || '发生错误'));
     state.socket.on('room-closed', () => { showToast('房间已解散'); leaveRoom(); });
+  }
+
+  // HTML 转义函数
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
   }
 
   // ==================== 4. 辅助逻辑 ====================
   function updateGameUI() {
     const r = state.currentRoom;
-    $('roomIdDisplay').textContent = r.id;
+    if (!r) return;
+    
+    $('roomIdDisplay').textContent = r.id || '-';
     $('roleDisplay').textContent = state.myRole === 'watcher' ? '观战者' : (state.myRole === 'black' ? '执黑' : '执白');
 
     // 更新玩家状态
-    updatePlayer('black', r.players.black, r.currentTurn === 1 && r.status === 'playing');
-    updatePlayer('white', r.players.white, r.currentTurn === 2 && r.status === 'playing');
+    updatePlayer('black', r.players?.black, r.currentTurn === 1 && r.status === 'playing');
+    updatePlayer('white', r.players?.white, r.currentTurn === 2 && r.status === 'playing');
     
     // 更新历史消息
-    if(r.chat) {
-        $('chatMessages').innerHTML = r.chat.map(m => `<div class="msg"><b>${m.nickname}:</b>${m.message}</div>`).join('');
+    if(r.chat && Array.isArray(r.chat)) {
+      $('chatMessages').innerHTML = r.chat.map(m => {
+        const safeNick = escapeHtml(m.nickname);
+        const safeMsg = escapeHtml(m.message);
+        return `<div class="msg"><b>${safeNick}:</b>${safeMsg}</div>`;
+      }).join('');
+      $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
     }
   }
 
@@ -588,21 +1272,23 @@
     const nameEl = $(`${color}Name`);
     const timerEl = $(`${color}Timer`);
     
+    if (!el || !nameEl || !timerEl) return;
+    
     if (player) {
-      nameEl.textContent = player.nickname;
-      el.style.opacity = 1;
+      nameEl.textContent = player.nickname || '-';
+      el.style.opacity = '1';
     } else {
       nameEl.textContent = '等待加入...';
-      el.style.opacity = 0.5;
+      el.style.opacity = '0.5';
     }
 
+    const avatar = el.querySelector('.avatar');
     if (isTurn) {
       el.classList.add('active');
-      el.querySelector('.avatar').classList.add('thinking');
-      // 计时器文字由 timer function 更新
+      if (avatar) avatar.classList.add('thinking');
     } else {
       el.classList.remove('active');
-      el.querySelector('.avatar').classList.remove('thinking');
+      if (avatar) avatar.classList.remove('thinking');
       timerEl.textContent = '';
     }
   }
@@ -613,30 +1299,42 @@
     state.timeRemaining = Math.floor(timeLimit / 1000);
     
     const targetId = currentTurn === 1 ? 'blackTimer' : 'whiteTimer';
+    const timerEl = $(targetId);
+    if (!timerEl) return;
+    
+    timerEl.textContent = state.timeRemaining + 's';
     
     state.turnTimer = setInterval(() => {
       state.timeRemaining--;
       if(state.timeRemaining >= 0) {
-        $(targetId).textContent = state.timeRemaining + 's';
+        timerEl.textContent = state.timeRemaining + 's';
       }
       if (state.timeRemaining <= 0) stopClientTimer();
     }, 1000);
-    
-    // 立即显示一次
-    $(targetId).textContent = state.timeRemaining + 's';
   }
 
   function stopClientTimer() {
-    if (state.turnTimer) clearInterval(state.turnTimer);
-    $('blackTimer').textContent = '';
-    $('whiteTimer').textContent = '';
+    if (state.turnTimer) {
+      clearInterval(state.turnTimer);
+      state.turnTimer = null;
+    }
+    const blackTimer = $('blackTimer');
+    const whiteTimer = $('whiteTimer');
+    if (blackTimer) blackTimer.textContent = '';
+    if (whiteTimer) whiteTimer.textContent = '';
   }
 
   function joinLobby() {
     const nick = $('nicknameInput').value.trim();
     if (!nick) return showToast('请输入昵称');
+    if (nick.length > 12) return showToast('昵称最多12个字符');
+    
     state.nickname = nick;
-    localStorage.setItem('gomoku_nick', nick);
+    try {
+      localStorage.setItem('gomoku_nick', nick);
+    } catch(e) {
+      // localStorage 可能不可用
+    }
     state.socket.emit('join-lobby', { nickname: nick });
     
     $('loginPanel').style.display = 'none';
@@ -644,38 +1342,55 @@
 
     // 如果链接里带有房间号，登录后自动加入
     if (state.pendingRoomId) {
-        showToast('正在通过邀请加入房间...');
-        joinRoom(state.pendingRoomId);
-        state.pendingRoomId = null; // 清除缓存
-        // 清除 URL 中的参数，防止刷新重复加入
+      showToast('正在通过邀请加入房间...');
+      joinRoom(state.pendingRoomId);
+      state.pendingRoomId = null;
+      try {
         window.history.replaceState({}, document.title, window.location.pathname);
+      } catch(e) {}
     }
   }
 
-  window.joinRoom = (id) => state.socket.emit('join-room', { roomId: id, asWatcher: false });
-  window.watchRoom = (id) => state.socket.emit('join-room', { roomId: id, asWatcher: true }); 
+  window.joinRoom = (id) => {
+    if (!id) return;
+    state.socket.emit('join-room', { roomId: id, asWatcher: false });
+  };
+  
+  window.watchRoom = (id) => {
+    if (!id) return;
+    state.socket.emit('join-room', { roomId: id, asWatcher: true });
+  };
   
   function leaveRoom() {
-    if(state.currentRoom) state.socket.emit('leave-room', { roomId: state.currentRoom.id });
+    if(state.currentRoom) {
+      state.socket.emit('leave-room', { roomId: state.currentRoom.id });
+    }
     state.currentRoom = null;
     state.board = null;
+    state.lastMove = null;
+    state.isPlacingStone = false;
     stopClientTimer();
     switchView('lobbyView');
   }
 
   // ==================== 5. 事件绑定 ====================
   $('joinLobbyBtn').onclick = joinLobby;
-  $('nicknameInput').onkeypress = (e) => e.key === 'Enter' && joinLobby();
+  $('nicknameInput').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      joinLobby();
+    }
+  };
 
   // 弹窗创建房间逻辑
   $('createRoomBtn').onclick = () => {
     showModal('创建房间', '请输入房间名称', [
         { text: '取消', class: 'btn-outline', onClick: () => {} },
         { text: '创建', class: 'btn-primary', onClick: (val) => {
-            state.socket.emit('create-room', { name: val || `${state.nickname}的房间` });
+            const roomName = (val || '').trim() || `${state.nickname}的房间`;
+            state.socket.emit('create-room', { name: roomName });
         }}
-    ], true); // 开启输入框
-    $('modalInput').focus();
+    ], true);
   };
 
   $('quickMatchBtn').onclick = () => state.socket.emit('quick-match');
@@ -683,93 +1398,370 @@
   
   // 聊天发送
   const sendMsg = () => {
-    const val = $('chatInput').value.trim();
+    const input = $('chatInput');
+    const val = input.value.trim();
     if(val && state.currentRoom) {
       state.socket.emit('chat-message', { roomId: state.currentRoom.id, message: val });
-      $('chatInput').value = '';
+      input.value = '';
     }
   };
   $('sendChatBtn').onclick = sendMsg;
-  $('chatInput').onkeypress = (e) => e.key === 'Enter' && sendMsg();
-  
-  // 游戏控制
-  $('undoBtn').onclick = () => state.socket.emit('request-undo', { roomId: state.currentRoom.id });
-  $('swapBtn').onclick = () => state.socket.emit('request-swap', { roomId: state.currentRoom.id });
-  $('surrenderBtn').onclick = () => { if(confirm('确定认输?')) state.socket.emit('surrender', { roomId: state.currentRoom.id }); };
-  $('leaveRoomBtn').onclick = () => { if(confirm('确定离开?')) leaveRoom(); };
-  
-  // 邀请链接
-  $('inviteBtn').onclick = () => {
-      const url = window.location.href.split('?')[0] + '?room=' + state.currentRoom.id;
-      navigator.clipboard.writeText(url).then(() => showToast('邀请链接已复制！')).catch(() => showToast('复制失败'));
-  };
-
-  // Canvas 鼠标/触摸事件
-  const handleInput = (clientX, clientY, isClick) => {
-    if(!state.currentRoom || state.currentRoom.status !== 'playing') return;
-    const rect = canvas.getBoundingClientRect();
-    const dpr = window.devicePixelRatio || 1;
-    const x = (clientX - rect.left) * (canvas.width / rect.width);
-    const y = (clientY - rect.top) * (canvas.height / rect.height);
-    
-    const c = Math.round((x/dpr - state.padding) / state.cellSize);
-    const r = Math.round((y/dpr - state.padding) / state.cellSize);
-    
-    if (c >= 0 && c < state.boardSize && r >= 0 && r < state.boardSize) {
-      if(!state.hoverPos || state.hoverPos.x !== c || state.hoverPos.y !== r) {
-        state.hoverPos = { x: c, y: r };
-        renderBoard();
-      }
-      // 如果是点击，发送落子
-      if (isClick && state.myRole !== 'watcher') {
-         // 简单的防抖：如果是空位
-         if (state.board[c][r] === 0) {
-           state.socket.emit('place-stone', { roomId: state.currentRoom.id, x: c, y: r });
-         }
-      }
+  $('chatInput').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      sendMsg();
     }
   };
-
-  canvas.addEventListener('mousemove', e => handleInput(e.clientX, e.clientY, false));
-  canvas.addEventListener('mousedown', e => handleInput(e.clientX, e.clientY, true));
   
-  // 窗口大小适配
-  window.addEventListener('resize', resizeBoard);
+  // 游戏控制
+  $('undoBtn').onclick = () => {
+    if (state.currentRoom) {
+      state.socket.emit('request-undo', { roomId: state.currentRoom.id });
+    }
+  };
   
-  // 初始化
-  initSocket();
+  $('swapBtn').onclick = () => {
+    if (state.currentRoom) {
+      state.socket.emit('request-swap', { roomId: state.currentRoom.id });
+    }
+  };
   
-  // 处理 URL 邀请参数 (放在 initSocket 之后)
-  const params = new URLSearchParams(window.location.search);
-  const inviteRoomId = params.get('room');
-  if(inviteRoomId) {
-      // 存入 state，等待用户输入昵称登录后自动调用
-      state.pendingRoomId = inviteRoomId;
-      // 在输入框上方提示一下
-      showToast('检测到邀请，输入昵称后自动加入');
+  $('surrenderBtn').onclick = () => {
+    if (state.currentRoom && confirm('确定认输?')) {
+      state.socket.emit('surrender', { roomId: state.currentRoom.id });
+    }
+  };
+  
+  $('leaveRoomBtn').onclick = () => {
+    if (confirm('确定离开?')) {
+      leaveRoom();
+    }
+  };
+  
+  // 邀请链接 - 兼容性处理
+  $('inviteBtn').onclick = () => {
+    if (!state.currentRoom) return;
+    
+    const url = window.location.href.split('?')[0] + '?room=' + state.currentRoom.id;
+    
+    // 尝试使用 Clipboard API
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(url)
+        .then(() => showToast('邀请链接已复制！'))
+        .catch(() => fallbackCopy(url));
+    } else {
+      fallbackCopy(url);
+    }
+  };
+  
+  // 回退复制方法
+  function fallbackCopy(text) {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '0';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    
+    try {
+      const successful = document.execCommand('copy');
+      showToast(successful ? '邀请链接已复制！' : '复制失败，请手动复制');
+    } catch (err) {
+      showToast('复制失败');
+    }
+    
+    document.body.removeChild(textarea);
   }
+
+  // ==================== 6. Canvas 输入处理 (跨设备兼容) ====================
   
-  // 触摸事件支持
-  canvas.addEventListener('touchmove', e => {
+  // 获取棋盘坐标
+  function getBoardPosition(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 3);
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
+    
+    const c = Math.round((x / dpr - state.padding) / state.cellSize);
+    const r = Math.round((y / dpr - state.padding) / state.cellSize);
+    
+    if (c >= 0 && c < state.boardSize && r >= 0 && r < state.boardSize) {
+      return { x: c, y: r };
+    }
+    return null;
+  }
+
+  // 处理输入
+  function handleInput(clientX, clientY, isClick) {
+    if (!state.currentRoom || state.currentRoom.status !== 'playing') return;
+    if (!state.board) return;
+    
+    const pos = getBoardPosition(clientX, clientY);
+    if (!pos) return;
+    
+    // 更新悬停位置
+    if (!state.hoverPos || state.hoverPos.x !== pos.x || state.hoverPos.y !== pos.y) {
+      state.hoverPos = pos;
+      renderBoard();
+    }
+    
+    // 处理点击落子
+    if (isClick && state.myRole !== 'watcher' && !state.isPlacingStone) {
+      const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) || 
+                       (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
+      
+      if (isMyTurn && state.board[pos.x] && state.board[pos.x][pos.y] === 0) {
+        state.isPlacingStone = true;
+        state.socket.emit('place-stone', { 
+          roomId: state.currentRoom.id, 
+          x: pos.x, 
+          y: pos.y 
+        });
+        
+        // 超时重置
+        setTimeout(() => {
+          state.isPlacingStone = false;
+        }, 3000);
+      }
+    }
+  }
+
+  // 鼠标事件
+  canvas.addEventListener('mousemove', (e) => {
+    handleInput(e.clientX, e.clientY, false);
+  });
+  
+  canvas.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    const touch = e.touches[0];
-    handleInput(touch.clientX, touch.clientY, false);
-  }, { passive: false });
-  
-  canvas.addEventListener('touchstart', e => {
-    e.preventDefault();
-    const touch = e.touches[0];
-    handleInput(touch.clientX, touch.clientY, true);
-  }, { passive: false });
-  
-  canvas.addEventListener('touchend', () => {
-    state.hoverPos = null;
-    renderBoard();
+    handleInput(e.clientX, e.clientY, true);
   });
   
   canvas.addEventListener('mouseleave', () => {
     state.hoverPos = null;
     renderBoard();
+  });
+
+  // 触摸事件 - 优化移动端体验
+  let touchStartPos = null;
+  let touchMoved = false;
+
+  canvas.addEventListener('touchstart', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    touchStartPos = { x: touch.clientX, y: touch.clientY };
+    touchMoved = false;
+    
+    // 显示预览
+    handleInput(touch.clientX, touch.clientY, false);
+  }, { passive: false });
+
+  canvas.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    const touch = e.touches[0];
+    
+    // 检测是否移动了
+    if (touchStartPos) {
+      const dx = Math.abs(touch.clientX - touchStartPos.x);
+      const dy = Math.abs(touch.clientY - touchStartPos.y);
+      if (dx > 10 || dy > 10) {
+        touchMoved = true;
+      }
+    }
+    
+    handleInput(touch.clientX, touch.clientY, false);
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    e.preventDefault();
+    
+    // 只有在没有移动的情况下才落子
+    if (!touchMoved && state.hoverPos) {
+      const pos = state.hoverPos;
+      handleInput(
+        state.padding + pos.x * state.cellSize,
+        state.padding + pos.y * state.cellSize,
+        true
+      );
+      
+      // 直接使用保存的位置落子
+      if (state.currentRoom && state.currentRoom.status === 'playing' && 
+          state.myRole !== 'watcher' && !state.isPlacingStone) {
+        const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) || 
+                         (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
+        
+        if (isMyTurn && state.board && state.board[pos.x] && state.board[pos.x][pos.y] === 0) {
+          state.isPlacingStone = true;
+          state.socket.emit('place-stone', { 
+            roomId: state.currentRoom.id, 
+            x: pos.x, 
+            y: pos.y 
+          });
+          
+          setTimeout(() => {
+            state.isPlacingStone = false;
+          }, 3000);
+        }
+      }
+    }
+    
+    // 清除悬停状态
+    setTimeout(() => {
+      state.hoverPos = null;
+      renderBoard();
+    }, 100);
+    
+    touchStartPos = null;
+    touchMoved = false;
+  }, { passive: false });
+
+  canvas.addEventListener('touchcancel', () => {
+    state.hoverPos = null;
+    touchStartPos = null;
+    touchMoved = false;
+    renderBoard();
+  });
+
+  // ==================== 7. 初始化和事件监听 ====================
+  
+  // 窗口大小变化
+  let resizeTimeout;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimeout);
+    resizeTimeout = setTimeout(resizeBoard, 100);
+  });
+
+  // 屏幕方向变化
+  window.addEventListener('orientationchange', () => {
+    setTimeout(resizeBoard, 200);
+  });
+
+  // 可见性变化 (标签页切换)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.currentRoom) {
+      // 重新渲染棋盘
+      renderBoard();
+    }
+  });
+
+  // 防止 iOS Safari 双击缩放
+  document.addEventListener('touchend', (e) => {
+    const now = Date.now();
+    if (now - state.lastTouchTime < 300) {
+      e.preventDefault();
+    }
+    state.lastTouchTime = now;
+  }, { passive: false });
+
+  // 防止页面滚动 (在游戏视图中)
+  document.addEventListener('touchmove', (e) => {
+    if ($('gameView').classList.contains('active')) {
+      const target = e.target;
+      // 允许聊天框滚动
+      if (target.closest('.chat-box') || target.closest('.view')) {
+        return;
+      }
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+  // 键盘事件 (无障碍支持)
+  document.addEventListener('keydown', (e) => {
+    // ESC 关闭弹窗
+    if (e.key === 'Escape' && $('commonModal').classList.contains('active')) {
+      closeModal();
+    }
+  });
+
+  // 初始化 Socket
+  initSocket();
+  
+  // 处理 URL 邀请参数
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const inviteRoomId = params.get('room');
+    if (inviteRoomId) {
+      state.pendingRoomId = inviteRoomId;
+      showToast('检测到邀请，输入昵称后自动加入');
+    }
+  } catch(e) {
+    // URL 解析失败
+  }
+
+  // 页面加载完成后初始化
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+      // 尝试恢复昵称
+      try {
+        const saved = localStorage.getItem('gomoku_nick');
+        if (saved) $('nicknameInput').value = saved;
+      } catch(e) {}
+    });
+  } else {
+    try {
+      const saved = localStorage.getItem('gomoku_nick');
+      if (saved) $('nicknameInput').value = saved;
+    } catch(e) {}
+  }
+
+  // 处理 iOS 虚拟键盘
+  if (isIOS) {
+    const inputs = document.querySelectorAll('input[type="text"]');
+    inputs.forEach(input => {
+      input.addEventListener('focus', () => {
+        // 滚动到输入框
+        setTimeout(() => {
+          input.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 300);
+      });
+    });
+  }
+
+  // 处理 Android 返回键
+  if (isAndroid) {
+    window.addEventListener('popstate', (e) => {
+      if ($('commonModal').classList.contains('active')) {
+        e.preventDefault();
+        closeModal();
+        history.pushState(null, '', window.location.href);
+      } else if ($('gameView').classList.contains('active')) {
+        e.preventDefault();
+        if (confirm('确定离开游戏?')) {
+          leaveRoom();
+        } else {
+          history.pushState(null, '', window.location.href);
+        }
+      }
+    });
+    history.pushState(null, '', window.location.href);
+  }
+
+  // 性能优化：使用 requestAnimationFrame 进行渲染
+  let renderScheduled = false;
+  const originalRenderBoard = renderBoard;
+  renderBoard = function() {
+    if (!renderScheduled) {
+      renderScheduled = true;
+      requestAnimationFrame(() => {
+        originalRenderBoard();
+        renderScheduled = false;
+      });
+    }
+  };
+
+  console.log('🎮 云弈 ZEN GOMOKU 已加载');
+  console.log('📱 设备信息:', {
+    isTouchDevice,
+    isIOS,
+    isAndroid,
+    isSafari,
+    screenWidth: window.innerWidth,
+    screenHeight: window.innerHeight,
+    devicePixelRatio: window.devicePixelRatio
   });
 
 </script>
