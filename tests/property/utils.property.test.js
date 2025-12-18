@@ -165,11 +165,16 @@ describe('Utility Functions Properties', () => {
     });
 
     test('shortcuts in text are replaced with emojis', () => {
+      // 生成不包含任何 emoji 快捷方式的安全字符串
+      const safeString = fc.string({ maxLength: 50 }).filter(s => {
+        return !Object.keys(EMOJI_MAP).some(shortcut => s.includes(shortcut));
+      });
+      
       fc.assert(
         fc.property(
           fc.constantFrom(...Object.keys(EMOJI_MAP)),
-          fc.string({ maxLength: 50 }),
-          fc.string({ maxLength: 50 }),
+          safeString,
+          safeString,
           (shortcut, prefix, suffix) => {
             const text = prefix + shortcut + suffix;
             const result = convertEmoji(text);

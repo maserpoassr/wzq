@@ -380,11 +380,27 @@
       border-radius: 50%; 
       border: 2px solid var(--primary); 
       border-top-color: transparent; 
-      -webkit-animation: spin 3s ease-in-out infinite;
-      animation: spin 3s ease-in-out infinite;
+      -webkit-animation: spin 3s linear infinite;
+      -moz-animation: spin 3s linear infinite;
+      -o-animation: spin 3s linear infinite;
+      animation: spin 3s linear infinite;
     }
-    @-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
-    @keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+    @-webkit-keyframes spin { 
+      from { -webkit-transform: rotate(0deg); transform: rotate(0deg); } 
+      to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } 
+    }
+    @-moz-keyframes spin { 
+      from { -moz-transform: rotate(0deg); transform: rotate(0deg); } 
+      to { -moz-transform: rotate(360deg); transform: rotate(360deg); } 
+    }
+    @-o-keyframes spin { 
+      from { -o-transform: rotate(0deg); transform: rotate(0deg); } 
+      to { -o-transform: rotate(360deg); transform: rotate(360deg); } 
+    }
+    @keyframes spin { 
+      from { transform: rotate(0deg); } 
+      to { transform: rotate(360deg); } 
+    }
 
     /* 棋盘 */
     .board-wrapper { 
@@ -427,7 +443,8 @@
       -webkit-box-direction: normal;
       -ms-flex-direction: column;
       flex-direction: column; 
-      overflow: hidden; 
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     .chat-box { 
       -webkit-box-flex: 1;
@@ -590,10 +607,12 @@
         -webkit-box-ordinal-group: 4;
         -ms-flex-order: 3;
         order: 3; 
-        max-height: 35vh;
+        max-height: none;
+        height: auto;
         margin: 0 0.5rem;
+        flex-shrink: 0;
       }
-      .chat-box { min-height: 80px; max-height: 120px; }
+      .chat-box { min-height: 60px; max-height: 100px; flex-shrink: 0; }
     }
 
     /* 手机竖屏 */
@@ -608,7 +627,11 @@
         gap: 0.8rem;
       }
       .game-layout { gap: 0.4rem; }
-      .control-panel { max-height: 40vh; }
+      .control-panel { 
+        max-height: none;
+        height: auto;
+        flex-shrink: 0;
+      }
       .btn { 
         padding: 0.6rem 1rem; 
         font-size: 0.75rem;
@@ -616,9 +639,10 @@
       }
       .btn-grid { gap: 0.4rem; }
       .chat-box { 
-        min-height: 60px; 
-        max-height: 100px;
+        min-height: 50px; 
+        max-height: 80px;
         font-size: 0.8rem;
+        flex-shrink: 0;
       }
     }
 
@@ -631,11 +655,18 @@
       .lobby-center h1 { font-size: 1.6rem; }
       .player-card { padding: 0.4rem; gap: 0.4rem; }
       .avatar { width: 24px; height: 24px; }
-      .control-panel { max-height: 45vh; }
+      .control-panel { 
+        max-height: none;
+        height: auto;
+      }
       .btn { 
         padding: 0.5rem 0.8rem; 
         font-size: 0.7rem;
         min-height: 36px;
+      }
+      .chat-box {
+        min-height: 40px;
+        max-height: 60px;
       }
     }
 
@@ -735,7 +766,11 @@
       <div id="lobbyContent" style="display: none; width: 100%;">
         <div style="max-width: 1200px; margin: 0 auto; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; padding: 0.5rem; gap: 0.5rem;">
           <h2 style="font-family:'Cinzel'; color:var(--text-main);">Lobby</h2>
-          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center;">
+            <div style="display: flex; gap: 0.3rem;">
+              <input type="text" id="roomSearchInput" placeholder="房间号" maxlength="6" autocomplete="off" style="width: 80px; padding: 0.5rem; text-align: center; font-size: 0.85rem;">
+              <button class="btn btn-outline" id="searchRoomBtn" style="padding: 0.5rem 0.8rem;">🔍</button>
+            </div>
             <button class="btn btn-primary" id="createRoomBtn">＋ 创建</button>
             <button class="btn btn-outline" id="quickMatchBtn">⚡ 匹配</button>
             <button class="btn btn-outline" id="refreshBtn">↻ 刷新</button>
@@ -993,12 +1028,16 @@
       }
     }
 
-    // 预选框
+    // 预判棋子（半透明）
     if (state.hoverPos && state.myRole !== 'watcher' && state.currentRoom?.status === 'playing') {
        const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) || 
                         (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
        if (isMyTurn && state.board && state.board[state.hoverPos.x] && state.board[state.hoverPos.x][state.hoverPos.y] === 0) {
-         drawSelection(state.hoverPos.x, state.hoverPos.y);
+         // 绘制半透明预判棋子
+         const previewColor = state.myRole === 'black' ? 1 : 2;
+         ctx.globalAlpha = 0.5;
+         drawStone(state.hoverPos.x, state.hoverPos.y, previewColor);
+         ctx.globalAlpha = 1.0;
        }
     }
 
@@ -1051,23 +1090,6 @@
     ctx.arc(cx, cy, r, 0, Math.PI * 2); 
     ctx.fill();
     ctx.restore();
-  }
-
-  function drawSelection(x, y) {
-    const cx = state.padding + x * state.cellSize;
-    const cy = state.padding + y * state.cellSize;
-    const size = state.cellSize * 0.4;
-    const corner = Math.max(3, size * 0.3);
-    
-    ctx.strokeStyle = "rgba(197, 160, 89, 0.8)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    // 四个角
-    ctx.moveTo(cx - size, cy - size + corner); ctx.lineTo(cx - size, cy - size); ctx.lineTo(cx - size + corner, cy - size);
-    ctx.moveTo(cx + size - corner, cy - size); ctx.lineTo(cx + size, cy - size); ctx.lineTo(cx + size, cy - size + corner);
-    ctx.moveTo(cx + size, cy + size - corner); ctx.lineTo(cx + size, cy + size); ctx.lineTo(cx + size - corner, cy + size);
-    ctx.moveTo(cx - size + corner, cy + size); ctx.lineTo(cx - size, cy + size); ctx.lineTo(cx - size, cy + size - corner);
-    ctx.stroke();
   }
 
   // ==================== 3. Socket.IO 逻辑交互 ====================
@@ -1123,8 +1145,11 @@
         return `
         <div class="glass-card room-card" tabindex="0" role="button" aria-label="房间 ${safeName}">
           <div style="display:flex; justify-content:space-between; margin-bottom:0.5rem;">
-            <span style="font-weight:bold; color:var(--text-main); font-family:'Cinzel'; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:60%;">${safeName}</span>
-            <span class="room-status ${room.status === 'playing' ? 'status-playing' : 'status-waiting'}">${room.status}</span>
+            <span style="font-weight:bold; color:var(--text-main); font-family:'Cinzel'; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:50%;">${safeName}</span>
+            <div style="display:flex; gap:0.5rem; align-items:center;">
+              <span style="font-size:0.7rem; color:var(--primary); font-family:monospace;">#${room.id}</span>
+              <span class="room-status ${room.status === 'playing' ? 'status-playing' : 'status-waiting'}">${room.status}</span>
+            </div>
           </div>
           <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:0.8rem;">
             <div>⚫ ${safeBlack}</div>
@@ -1240,6 +1265,24 @@
     // 错误处理
     state.socket.on('error', ({message}) => showToast(message || '发生错误'));
     state.socket.on('room-closed', () => { showToast('房间已解散'); leaveRoom(); });
+    
+    // 13. 房间搜索结果
+    state.socket.on('search-result', ({ found, room }) => {
+      if (!found) {
+        showToast('未找到该房间');
+        return;
+      }
+      // 显示搜索到的房间，询问是否加入
+      const isFull = room.blackPlayer && room.whitePlayer;
+      const canJoin = room.status === 'waiting' && !isFull;
+      const safeName = escapeHtml(room.name);
+      
+      showModal(`房间 #${room.id}`, `${safeName}\n⚫ ${room.blackPlayer || '空位'} | ⚪ ${room.whitePlayer || '空位'}\n状态: ${room.status}`, [
+        canJoin ? { text: '加入游戏', class: 'btn-primary', onClick: () => joinRoom(room.id) } : null,
+        { text: '观战', class: 'btn-outline', onClick: () => watchRoom(room.id) },
+        { text: '取消', class: 'btn-outline', onClick: () => {} }
+      ].filter(Boolean));
+    });
     
     // 房间重置相关事件
     state.socket.on('room-reset-by-opponent', ({ message }) => {
@@ -1413,6 +1456,27 @@
   $('quickMatchBtn').onclick = () => state.socket.emit('quick-match');
   $('refreshBtn').onclick = () => state.socket.emit('refresh-rooms');
   
+  // 房间搜索
+  const searchRoom = () => {
+    const roomId = $('roomSearchInput').value.trim();
+    if (!roomId) {
+      showToast('请输入房间号');
+      return;
+    }
+    if (!/^\d{4,6}$/.test(roomId)) {
+      showToast('房间号为4-6位数字');
+      return;
+    }
+    state.socket.emit('search-room', { roomId });
+  };
+  $('searchRoomBtn').onclick = searchRoom;
+  $('roomSearchInput').onkeypress = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      searchRoom();
+    }
+  };
+  
   // 聊天发送
   const sendMsg = () => {
     const input = $('chatInput');
@@ -1494,18 +1558,18 @@
 
   // ==================== 6. Canvas 输入处理 (跨设备兼容) ====================
   
-  // 获取棋盘坐标
+  // 获取棋盘坐标 - 直接使用 CSS 像素坐标计算
   function getBoardPosition(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 3);
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
     
-    const x = (clientX - rect.left) * scaleX;
-    const y = (clientY - rect.top) * scaleY;
+    // 直接使用相对于 canvas 的 CSS 像素坐标
+    // 不需要考虑 DPR，因为 state.padding 和 state.cellSize 都是基于 CSS 像素计算的
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
     
-    const c = Math.round((x / dpr - state.padding) / state.cellSize);
-    const r = Math.round((y / dpr - state.padding) / state.cellSize);
+    // 计算棋盘坐标
+    const c = Math.round((x - state.padding) / state.cellSize);
+    const r = Math.round((y - state.padding) / state.cellSize);
     
     if (c >= 0 && c < state.boardSize && r >= 0 && r < state.boardSize) {
       return { x: c, y: r };
@@ -1596,34 +1660,10 @@
   canvas.addEventListener('touchend', (e) => {
     e.preventDefault();
     
-    // 只有在没有移动的情况下才落子
-    if (!touchMoved && state.hoverPos) {
-      const pos = state.hoverPos;
-      handleInput(
-        state.padding + pos.x * state.cellSize,
-        state.padding + pos.y * state.cellSize,
-        true
-      );
-      
-      // 直接使用保存的位置落子
-      if (state.currentRoom && state.currentRoom.status === 'playing' && 
-          state.myRole !== 'watcher' && !state.isPlacingStone) {
-        const isMyTurn = (state.myRole === 'black' && state.currentRoom.currentTurn === 1) || 
-                         (state.myRole === 'white' && state.currentRoom.currentTurn === 2);
-        
-        if (isMyTurn && state.board && state.board[pos.x] && state.board[pos.x][pos.y] === 0) {
-          state.isPlacingStone = true;
-          state.socket.emit('place-stone', { 
-            roomId: state.currentRoom.id, 
-            x: pos.x, 
-            y: pos.y 
-          });
-          
-          setTimeout(() => {
-            state.isPlacingStone = false;
-          }, 3000);
-        }
-      }
+    // 只有在没有移动的情况下才落子，使用 touchStartPos 的坐标
+    if (!touchMoved && touchStartPos) {
+      // 直接使用触摸开始的坐标进行落子
+      handleInput(touchStartPos.x, touchStartPos.y, true);
     }
     
     // 清除悬停状态

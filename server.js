@@ -716,6 +716,31 @@ io.on('connection', (socket) => {
     socket.emit('room-list', roomManager.getRoomList());
   });
   
+  // 搜索房间
+  socket.on('search-room', ({ roomId }) => {
+    const room = roomManager.getRoom(roomId);
+    
+    if (!room) {
+      socket.emit('search-result', { found: false });
+      return;
+    }
+    
+    // 返回房间信息
+    socket.emit('search-result', {
+      found: true,
+      room: {
+        id: room.id,
+        name: room.name,
+        blackPlayer: room.players.black ? room.players.black.nickname : null,
+        whitePlayer: room.players.white ? room.players.white.nickname : null,
+        status: room.status,
+        watcherCount: room.watchers.length
+      }
+    });
+    
+    console.log(`[搜索] 用户搜索房间 ${roomId}: ${room ? '找到' : '未找到'}`);
+  });
+  
   // 断开连接
   socket.on('disconnect', () => {
     const user = onlineUsers.get(socket.id);
