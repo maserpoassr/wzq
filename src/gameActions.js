@@ -7,12 +7,15 @@
 
 const GameLogic = require('./gameLogic');
 
+// 每局最大悔棋次数
+const MAX_UNDO_PER_GAME = 5;
+
 /**
  * 请求悔棋
  * Requirements: 6.1
  * @param {Room} room - 房间对象
  * @param {string} socketId - 请求者的 socket ID
- * @returns {{success: boolean, error?: string, targetSocketId?: string}} 结果
+ * @returns {{success: boolean, error?: string, targetSocketId?: string, remainingUndos?: number}} 结果
  */
 function requestUndo(room, socketId) {
   // 检查游戏是否进行中
@@ -37,6 +40,17 @@ function requestUndo(room, socketId) {
     return { success: false, error: '您不是游戏玩家' };
   }
 
+  // 初始化悔棋计数（兼容旧房间）
+  if (!room.undoCount) {
+    room.undoCount = { black: 0, white: 0 };
+  }
+
+  // 检查悔棋次数是否已用完
+  const currentUndoCount = room.undoCount[requesterColor] || 0;
+  if (currentUndoCount >= MAX_UNDO_PER_GAME) {
+    return { success: false, error: `本局悔棋次数已用完（最多${MAX_UNDO_PER_GAME}次）` };
+  }
+
   // 获取对手的 socket ID
   const opponentColor = requesterColor === 'black' ? 'white' : 'black';
   const opponent = room.players[opponentColor];
@@ -48,7 +62,9 @@ function requestUndo(room, socketId) {
   return { 
     success: true, 
     targetSocketId: opponent.socketId,
-    requesterNickname: room.players[requesterColor].nickname
+    requesterNickname: room.players[requesterColor].nickname,
+    requesterColor: requesterColor,
+    remainingUndos: MAX_UNDO_PER_GAME - currentUndoCount - 1
   };
 }
 
@@ -58,9 +74,10 @@ function requestUndo(room, socketId) {
  * @param {Room} room - 房间对象
  * @param {string} socketId - 响应者的 socket ID
  * @param {boolean} accept - 是否接受
- * @returns {{success: boolean, accepted: boolean, error?: string}} 结果
+ * @param {string} requesterColor - 请求悔棋的玩家颜色 ('black' 或 'white')
+ * @returns {{success: boolean, accepted: boolean, error?: string, remainingUndos?: number}} 结果
  */
-function respondUndo(room, socketId, accept) {
+function respondUndo(room, socketId, accept, requesterColor) {
   // 检查游戏是否进行中
   if (room.status !== 'playing') {
     return { success: false, accepted: false, error: '游戏未在进行中' };
@@ -87,17 +104,18 @@ function respondUndo(room, socketId, accept) {
     return { success: true, accepted: false };
   }
 
-  // 执行悔棋
-  return executeUndo(room);
+  // 执行悔棋，传递请求者颜色以更新悔棋计数
+  return executeUndo(room, requesterColor);
 }
 
 /**
  * 执行悔棋操作
  * Requirements: 6.3
  * @param {Room} room - 房间对象
- * @returns {{success: boolean, accepted: boolean, error?: string}} 结果
+ * @param {string} requesterColor - 请求悔棋的玩家颜色 ('black' 或 'white')
+ * @returns {{success: boolean, accepted: boolean, error?: string, remainingUndos?: number}} 结果
  */
-function executeUndo(room) {
+function executeUndo(room, requesterColor) {
   if (room.history.length === 0) {
     return { success: false, accepted: false, error: '没有可悔棋的步骤' };
   }
@@ -114,7 +132,18 @@ function executeUndo(room) {
   // 更新最后活动时间
   room.lastActivity = Date.now();
 
-  return { success: true, accepted: true };
+  // 增加悔棋计数（如果提供了请求者颜色）
+  let remainingUndos = null;
+  if (requesterColor) {
+    // 初始化悔棋计数（兼容旧房间）
+    if (!room.undoCount) {
+      room.undoCount = { black: 0, white: 0 };
+    }
+    room.undoCount[requesterColor] = (room.undoCount[requesterColor] || 0) + 1;
+    remainingUndos = MAX_UNDO_PER_GAME - room.undoCount[requesterColor];
+  }
+
+  return { success: true, accepted: true, remainingUndos };
 }
 
 /**

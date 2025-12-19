@@ -73,7 +73,8 @@ class RoomManager {
       status: 'waiting',
       createdAt: now,
       lastActivity: now,
-      rematchRequests: { black: false, white: false }  // 再来一局请求状态
+      rematchRequests: { black: false, white: false },  // 再来一局请求状态
+      undoCount: { black: 0, white: 0 }  // 每局悔棋次数计数
     };
     
     this.rooms.set(roomId, room);
@@ -266,6 +267,7 @@ class RoomManager {
     room.winner = null;
     room.status = 'waiting';
     room.rematchRequests = { black: false, white: false };
+    room.undoCount = { black: 0, white: 0 };  // 重置悔棋次数
   }
 
   /**
@@ -316,6 +318,7 @@ class RoomManager {
     room.winner = null;
     room.status = 'waiting';
     room.rematchRequests = { black: false, white: false };
+    room.undoCount = { black: 0, white: 0 };  // 重置悔棋次数
     room.lastActivity = Date.now();
     
     // 如果双方玩家都在，直接开始游戏
@@ -359,8 +362,9 @@ class RoomManager {
     
     if (bothReady) {
       // 根据上局胜负决定是否交换黑白棋
-      // 如果有胜者，则交换黑白棋（胜者变为后手）
-      const shouldSwap = room.winner !== null;
+      // 只有当黑棋获胜时才交换，这样胜者变为白棋（后手）
+      // 如果白棋获胜，胜者已经是白棋，无需交换
+      const shouldSwap = room.winner === GameLogic.BLACK;
       
       // 重置房间，传入是否交换
       this.resetRoom(roomId, shouldSwap);

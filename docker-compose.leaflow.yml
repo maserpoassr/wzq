@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   gomoku:
-    image: ghcr.io/maserpoassr/wzq:main
+    image: ghcr.io/maserpoassr/wzq:v1.1.0
     container_name: gomoku
     ports:
       - "3000:3000"

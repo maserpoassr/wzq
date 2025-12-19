@@ -44,6 +44,12 @@ const roomTimers = new Map();
 // 回合时间限制（毫秒）
 const TURN_TIME_LIMIT = 30000; // 30秒
 
+// 再来一局超时时间（毫秒）
+const REMATCH_TIMEOUT = 30000; // 30秒
+
+// 再来一局超时计时器映射 (roomId -> { timer, requesterId })
+const rematchTimers = new Map();
+
 /**
  * 广播房间列表给所有大厅用户
  */
@@ -180,6 +186,55 @@ function handleTurnTimeout(roomId) {
   }
 }
 
+/**
+ * 启动再来一局超时计时器
+ * Requirements: 2.1, 2.2
+ * @param {string} roomId - 房间ID
+ * @param {string} requesterId - 请求者的 socket ID
+ */
+function startRematchTimeout(roomId, requesterId) {
+  // 清除旧计时器
+  clearRematchTimeout(roomId);
+  
+  const timer = setTimeout(() => {
+    handleRematchTimeout(roomId, requesterId);
+  }, REMATCH_TIMEOUT);
+  
+  rematchTimers.set(roomId, { timer, requesterId, startTime: Date.now() });
+}
+
+/**
+ * 清除再来一局超时计时器
+ * @param {string} roomId - 房间ID
+ */
+function clearRematchTimeout(roomId) {
+  const timerData = rematchTimers.get(roomId);
+  if (timerData) {
+    clearTimeout(timerData.timer);
+    rematchTimers.delete(roomId);
+  }
+}
+
+/**
+ * 处理再来一局超时
+ * Requirements: 2.1, 2.2
+ * @param {string} roomId - 房间ID
+ * @param {string} requesterId - 请求者的 socket ID
+ */
+function handleRematchTimeout(roomId, requesterId) {
+  const room = roomManager.getRoom(roomId);
+  if (!room) return;
+  
+  // 通知请求者超时
+  io.to(requesterId).emit('rematch-timeout', {
+    message: '对方未响应再来一局请求',
+    canContinueWaiting: true,
+    canLeave: true
+  });
+  
+  console.log(`[再来一局] 房间 ${roomId} 再来一局请求超时`);
+}
+
 // Socket.io 连接处理
 io.on('connection', (socket) => {
   console.log(`[连接] 用户连接: ${socket.id}`);
@@ -205,7 +260,8 @@ io.on('connection', (socket) => {
   socket.on('create-room', ({ name }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) {
-      socket.emit('error', { message: '请先加入大厅' });
+      // Requirements: 5.1, 5.2 - 使用 toast 类型的错误，不阻挡 UI 交互
+      socket.emit('lobby-required', { message: '请先加入大厅' });
       return;
     }
     
@@ -232,7 +288,8 @@ io.on('connection', (socket) => {
   socket.on('quick-match', () => {
     const user = onlineUsers.get(socket.id);
     if (!user) {
-      socket.emit('error', { message: '请先加入大厅' });
+      // Requirements: 5.1, 5.2 - 使用 toast 类型的错误，不阻挡 UI 交互
+      socket.emit('lobby-required', { message: '请先加入大厅' });
       return;
     }
     
@@ -292,7 +349,8 @@ io.on('connection', (socket) => {
   socket.on('join-room', ({ roomId, asWatcher }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) {
-      socket.emit('error', { message: '请先加入大厅' });
+      // Requirements: 5.1, 5.2 - 使用 toast 类型的错误，不阻挡 UI 交互
+      socket.emit('lobby-required', { message: '请先加入大厅' });
       return;
     }
     
@@ -333,9 +391,28 @@ io.on('connection', (socket) => {
   });
   
   // 离开房间
+  // Requirements: 3.1, 3.2, 3.3
   socket.on('leave-room', ({ roomId }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    
+    // 检查是否在再来一局等待状态
+    let wasInRematchWaiting = false;
+    let playerColor = null;
+    if (room) {
+      if (room.players.black && room.players.black.socketId === socket.id) {
+        playerColor = 'black';
+      } else if (room.players.white && room.players.white.socketId === socket.id) {
+        playerColor = 'white';
+      }
+      
+      // 检查是否有任何再来一局请求
+      if (room.rematchRequests && (room.rematchRequests.black || room.rematchRequests.white)) {
+        wasInRematchWaiting = true;
+      }
+    }
     
     const result = roomManager.leaveRoom(roomId, socket.id);
     
@@ -344,10 +421,31 @@ io.on('connection', (socket) => {
       user.currentRoom = null;
       lobbyUsers.add(socket.id);
       
-      // 清除计时器（如果房间游戏结束）
-      const room = roomManager.getRoom(roomId);
-      if (!room || room.status !== 'playing') {
+      // 清除计时器
+      const roomAfter = roomManager.getRoom(roomId);
+      if (!roomAfter || roomAfter.status !== 'playing') {
         clearTurnTimer(roomId);
+      }
+      
+      // 清除再来一局超时计时器
+      clearRematchTimeout(roomId);
+      
+      // 如果在再来一局等待期间离开，通知对方
+      if (wasInRematchWaiting && playerColor) {
+        const opponentColor = playerColor === 'black' ? 'white' : 'black';
+        const opponent = roomAfter?.players[opponentColor];
+        if (opponent) {
+          io.to(opponent.socketId).emit('opponent-left-rematch', {
+            canWaitNewOpponent: true,
+            roomStatus: roomAfter.status,
+            message: '对方已离开房间'
+          });
+        }
+        
+        // 重置房间的再来一局请求状态
+        if (roomAfter && roomAfter.rematchRequests) {
+          roomAfter.rematchRequests = { black: false, white: false };
+        }
       }
       
       // 通知房间内其他人
@@ -489,6 +587,9 @@ io.on('connection', (socket) => {
   });
 
   // 请求悔棋
+  // 存储待处理的悔棋请求（用于传递请求者颜色）
+  const pendingUndoRequests = new Map();
+  
   socket.on('request-undo', ({ roomId }) => {
     const room = roomManager.getRoom(roomId);
     if (!room) {
@@ -503,9 +604,13 @@ io.on('connection', (socket) => {
       return;
     }
     
+    // 存储请求者颜色，用于响应时更新悔棋计数
+    pendingUndoRequests.set(roomId, result.requesterColor);
+    
     // 发送悔棋请求给对手
     io.to(result.targetSocketId).emit('undo-requested', {
-      from: result.requesterNickname
+      from: result.requesterNickname,
+      remainingUndos: result.remainingUndos
     });
   });
   
@@ -517,7 +622,11 @@ io.on('connection', (socket) => {
       return;
     }
     
-    const result = respondUndo(room, socket.id, accept);
+    // 获取请求者颜色
+    const requesterColor = pendingUndoRequests.get(roomId);
+    pendingUndoRequests.delete(roomId);
+    
+    const result = respondUndo(room, socket.id, accept, requesterColor);
     
     if (!result.success) {
       socket.emit('error', { message: result.error });
@@ -525,7 +634,10 @@ io.on('connection', (socket) => {
     }
     
     // 广播悔棋结果
-    io.to(roomId).emit('undo-result', { accepted: result.accepted });
+    io.to(roomId).emit('undo-result', { 
+      accepted: result.accepted,
+      remainingUndos: result.remainingUndos
+    });
     
     if (result.accepted) {
       broadcastRoomUpdate(roomId);
@@ -573,8 +685,9 @@ io.on('connection', (socket) => {
     io.to(roomId).emit('chat-received', chatMessage);
   });
   
-  // 重置房间（单方即可重置，等待新对手）
-  socket.on('reset-room', ({ roomId }) => {
+  // 请求再来一局（双方确认机制）
+  // Requirements: 1.1, 1.2, 1.3, 1.4
+  socket.on('request-rematch', ({ roomId }) => {
     const user = onlineUsers.get(socket.id);
     if (!user) return;
     
@@ -584,121 +697,89 @@ io.on('connection', (socket) => {
       return;
     }
     
-    // 检查是否是房间内的玩家
-    const isBlack = room.players.black?.socketId === socket.id;
-    const isWhite = room.players.white?.socketId === socket.id;
+    // 确定请求者是哪方
+    let playerColor = null;
+    if (room.players.black && room.players.black.socketId === socket.id) {
+      playerColor = 'black';
+    } else if (room.players.white && room.players.white.socketId === socket.id) {
+      playerColor = 'white';
+    }
     
-    if (!isBlack && !isWhite) {
+    if (!playerColor) {
       socket.emit('error', { message: '您不是游戏玩家' });
       return;
     }
     
-    // 清除计时器
-    clearTurnTimer(roomId);
+    // 获取对手信息
+    const opponentColor = playerColor === 'black' ? 'white' : 'black';
+    const opponent = room.players[opponentColor];
     
-    // 重置房间状态
-    room.board = Array(15).fill(null).map(() => Array(15).fill(0));
-    room.history = [];
-    room.currentTurn = 1; // 黑棋先手
-    room.status = 'waiting'; // 设为等待状态
-    room.winner = null;
-    room.rematchRequests = [];
-    
-    // 保留请求者，移除对手
-    if (isBlack) {
-      // 如果白方还在，让白方离开
-      if (room.players.white) {
-        const whiteSocketId = room.players.white.socketId;
-        const whiteUser = onlineUsers.get(whiteSocketId);
-        if (whiteUser) {
-          // 通知白方房间已重置
-          io.to(whiteSocketId).emit('room-reset-by-opponent', {
-            message: '对方选择了再来一局，您已离开房间'
-          });
-          // 让白方离开房间
-          const whiteSocket = io.sockets.sockets.get(whiteSocketId);
-          if (whiteSocket) {
-            whiteSocket.leave(roomId);
-          }
-          whiteUser.currentRoom = null;
-          lobbyUsers.add(whiteSocketId);
-          io.to(whiteSocketId).emit('room-list', roomManager.getRoomList());
-        }
-        room.players.white = null;
-      }
-    } else {
-      // 如果黑方还在，让黑方离开，白方变成黑方
-      if (room.players.black) {
-        const blackSocketId = room.players.black.socketId;
-        const blackUser = onlineUsers.get(blackSocketId);
-        if (blackUser) {
-          io.to(blackSocketId).emit('room-reset-by-opponent', {
-            message: '对方选择了再来一局，您已离开房间'
-          });
-          const blackSocket = io.sockets.sockets.get(blackSocketId);
-          if (blackSocket) {
-            blackSocket.leave(roomId);
-          }
-          blackUser.currentRoom = null;
-          lobbyUsers.add(blackSocketId);
-          io.to(blackSocketId).emit('room-list', roomManager.getRoomList());
-        }
-      }
-      // 白方变成黑方
-      room.players.black = room.players.white;
-      room.players.white = null;
+    // 初始化 rematchRequests 如果不存在
+    if (!room.rematchRequests || typeof room.rematchRequests !== 'object') {
+      room.rematchRequests = { black: false, white: false };
     }
     
-    // 通知请求者房间已重置
-    socket.emit('room-reset-success', {
-      message: '房间已重置，等待对手加入...'
-    });
+    // 记录该玩家的再来一局请求
+    room.rematchRequests[playerColor] = true;
+    room.lastActivity = Date.now();
     
-    // 更新房间状态
-    broadcastRoomUpdate(roomId);
-    broadcastRoomList();
+    // 检查对方是否已经请求
+    const opponentRequested = room.rematchRequests[opponentColor];
     
-    console.log(`[重置房间] ${user.nickname} 重置了房间 ${roomId}`);
-  });
-  
-  // 请求再来一局（保留原有逻辑作为备用）
-  socket.on('request-rematch', ({ roomId }) => {
-    const user = onlineUsers.get(socket.id);
-    if (!user) return;
+    // 检查双方是否都请求了再来一局
+    const bothReady = room.rematchRequests.black && room.rematchRequests.white;
     
-    // 获取房间信息（在重置前）
-    const roomBefore = roomManager.getRoom(roomId);
-    if (!roomBefore) {
-      socket.emit('error', { message: '房间不存在' });
-      return;
-    }
-    
-    // 记录当前玩家的颜色（在重置前）
-    const playerColorBefore = roomBefore.players.black?.socketId === socket.id ? 'black' : 'white';
-    const opponentColorBefore = playerColorBefore === 'black' ? 'white' : 'black';
-    const opponent = roomBefore.players[opponentColorBefore];
-    
-    const result = roomManager.requestRematch(roomId, socket.id);
-    
-    if (!result.success) {
-      socket.emit('error', { message: result.error });
-      return;
-    }
-    
-    if (result.bothReady) {
-      // 双方都准备好了，开始新游戏
-      io.to(roomId).emit('rematch-start', { 
-        swapped: result.swapped,
-        message: result.swapped ? '黑白棋已交换！' : '新游戏开始！'
+    if (bothReady) {
+      // 清除再来一局超时计时器
+      clearRematchTimeout(roomId);
+      
+      // 根据上局胜负决定是否交换黑白棋（胜者变为后手/白棋）
+      const shouldSwap = room.winner !== null;
+      
+      // 记录交换前的角色，用于通知各玩家新角色
+      const blackSocketId = room.players.black.socketId;
+      const whiteSocketId = room.players.white.socketId;
+      
+      // 重置房间
+      roomManager.resetRoom(roomId, shouldSwap);
+      
+      // 清除回合计时器
+      clearTurnTimer(roomId);
+      
+      // 通知双方游戏开始
+      const roomAfter = roomManager.getRoom(roomId);
+      
+      // 给黑棋玩家发送其新角色
+      io.to(blackSocketId).emit('rematch-start', { 
+        swapped: shouldSwap,
+        newRole: shouldSwap ? 'white' : 'black',
+        message: shouldSwap ? '黑白棋已交换！' : '新游戏开始！'
       });
       
-      // 启动计时器
+      // 给白棋玩家发送其新角色
+      io.to(whiteSocketId).emit('rematch-start', { 
+        swapped: shouldSwap,
+        newRole: shouldSwap ? 'black' : 'white',
+        message: shouldSwap ? '黑白棋已交换！' : '新游戏开始！'
+      });
+      
+      // 启动回合计时器
       startTurnTimer(roomId);
       
       broadcastRoomUpdate(roomId);
       broadcastRoomList();
-      console.log(`[再来一局] 房间 ${roomId} 开始新游戏${result.swapped ? '（已交换黑白棋）' : ''}`);
+      console.log(`[再来一局] 房间 ${roomId} 双方确认，开始新游戏${shouldSwap ? '（已交换黑白棋）' : ''}`);
     } else {
+      // 只有一方请求，显示等待状态
+      // 启动再来一局超时计时器
+      startRematchTimeout(roomId, socket.id);
+      
+      // 通知请求者正在等待
+      socket.emit('rematch-waiting', { 
+        timeout: REMATCH_TIMEOUT,
+        opponentRequested: opponentRequested
+      });
+      
       // 通知对方有人请求再来一局
       if (opponent) {
         io.to(opponent.socketId).emit('rematch-requested', {
@@ -706,9 +787,46 @@ io.on('connection', (socket) => {
         });
       }
       
-      // 通知请求者正在等待
-      socket.emit('rematch-waiting');
+      console.log(`[再来一局] ${user.nickname} 请求再来一局，等待对方确认`);
     }
+  });
+  
+  // 取消再来一局请求
+  socket.on('cancel-rematch', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) return;
+    
+    // 确定请求者是哪方
+    let playerColor = null;
+    if (room.players.black && room.players.black.socketId === socket.id) {
+      playerColor = 'black';
+    } else if (room.players.white && room.players.white.socketId === socket.id) {
+      playerColor = 'white';
+    }
+    
+    if (!playerColor) return;
+    
+    // 取消请求
+    if (room.rematchRequests) {
+      room.rematchRequests[playerColor] = false;
+    }
+    
+    // 清除超时计时器
+    clearRematchTimeout(roomId);
+    
+    // 通知对方请求已取消
+    const opponentColor = playerColor === 'black' ? 'white' : 'black';
+    const opponent = room.players[opponentColor];
+    if (opponent) {
+      io.to(opponent.socketId).emit('rematch-cancelled', {
+        from: user.nickname
+      });
+    }
+    
+    console.log(`[再来一局] ${user.nickname} 取消了再来一局请求`);
   });
   
   // 刷新房间列表
@@ -742,6 +860,7 @@ io.on('connection', (socket) => {
   });
   
   // 断开连接
+  // Requirements: 2.3, 3.2, 3.3
   socket.on('disconnect', () => {
     const user = onlineUsers.get(socket.id);
     
@@ -749,8 +868,48 @@ io.on('connection', (socket) => {
       // 如果在房间中，离开房间
       if (user.currentRoom) {
         const roomId = user.currentRoom;
+        const room = roomManager.getRoom(roomId);
+        
+        // 检查是否在再来一局等待状态
+        let wasInRematchWaiting = false;
+        let playerColor = null;
+        if (room) {
+          if (room.players.black && room.players.black.socketId === socket.id) {
+            playerColor = 'black';
+          } else if (room.players.white && room.players.white.socketId === socket.id) {
+            playerColor = 'white';
+          }
+          
+          if (room.rematchRequests && (room.rematchRequests.black || room.rematchRequests.white)) {
+            wasInRematchWaiting = true;
+          }
+        }
+        
         const result = roomManager.leaveRoom(roomId, socket.id);
         if (result.success) {
+          // 清除再来一局超时计时器
+          clearRematchTimeout(roomId);
+          
+          const roomAfter = roomManager.getRoom(roomId);
+          
+          // 如果在再来一局等待期间断开，通知对方
+          if (wasInRematchWaiting && playerColor) {
+            const opponentColor = playerColor === 'black' ? 'white' : 'black';
+            const opponent = roomAfter?.players[opponentColor];
+            if (opponent) {
+              io.to(opponent.socketId).emit('opponent-left-rematch', {
+                canWaitNewOpponent: true,
+                roomStatus: roomAfter?.status || 'waiting',
+                message: '对方已断开连接'
+              });
+            }
+            
+            // 重置房间的再来一局请求状态
+            if (roomAfter && roomAfter.rematchRequests) {
+              roomAfter.rematchRequests = { black: false, white: false };
+            }
+          }
+          
           socket.to(roomId).emit('player-left', { nickname: result.nickname });
           broadcastRoomUpdate(roomId);
           broadcastRoomList();
