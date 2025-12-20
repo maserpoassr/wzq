@@ -41,10 +41,10 @@ services:
       - PYTHONUNBUFFERED=1
       - AI_MODEL_PATH=./models/0.pt
       - AI_DEVICE=cpu
-    volumes:
-      # 如果有预训练模型，挂载到这里
-      # - /path/to/models:/app/models:ro
-      - ai-models:/app/models
+    # 模型已包含在镜像中，无需挂载
+    # 如需使用自定义模型，取消下面的注释：
+    # volumes:
+    #   - /path/to/models:/app/models:ro
     logging:
       driver: "json-file"
       options:
@@ -71,7 +71,3 @@ services:
 networks:
   gomoku-net:
     name: gomoku-network
-
-volumes:
-  ai-models:
-    name: gomoku-ai-models
