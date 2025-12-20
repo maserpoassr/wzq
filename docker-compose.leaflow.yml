@@ -1,12 +1,12 @@
 # Gomoku Online - Leaflow 服务器部署配置
-# 版本: 2.0.0 - 包含人机对战功能
+# 版本: 2.1.0 - 使用 gomoku_rl PPO 模型
 # 使用方法: docker-compose -f docker-compose.leaflow.yml up -d
 version: '3.8'
 
 services:
   # Node.js 游戏服务器
   gomoku:
-    image: ghcr.io/maserpoassr/wzq-game:v2.0.0
+    image: ghcr.io/maserpoassr/wzq-game:v2.1.0
     container_name: gomoku
     ports:
       - "3000:3000"
@@ -32,13 +32,15 @@ services:
     networks:
       - gomoku-net
 
-  # Python AI 服务
+  # Python AI 服务 (gomoku_rl PPO 模型)
   gomoku-ai:
-    image: ghcr.io/maserpoassr/wzq-ai:v2.0.0
+    image: ghcr.io/maserpoassr/wzq-ai:v2.1.0
     container_name: gomoku-ai
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+      - AI_MODEL_PATH=./models/0.pt
+      - AI_DEVICE=cpu
     volumes:
       # 如果有预训练模型，挂载到这里
       # - /path/to/models:/app/models:ro
