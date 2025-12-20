@@ -1,12 +1,12 @@
 # Gomoku Online - Leaflow 服务器部署配置
-# 版本: 2.1.0 - 使用 gomoku_rl PPO 模型
+# 版本: 3.0.0 - 纯人人对战版本（无AI）
 # 使用方法: docker-compose -f docker-compose.leaflow.yml up -d
 version: '3.8'
 
 services:
   # Node.js 游戏服务器
   gomoku:
-    image: ghcr.io/maserpoassr/wzq-game:v2.1.0
+    image: ghcr.io/maserpoassr/wzq-game:v3.0.0
     container_name: gomoku
     ports:
       - "3000:3000"
@@ -14,10 +14,6 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - AI_SERVICE_URL=http://gomoku-ai:5001
-    depends_on:
-      gomoku-ai:
-        condition: service_healthy
     logging:
       driver: "json-file"
       options:
@@ -29,42 +25,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    networks:
-      - gomoku-net
-
-  # Python AI 服务 (gomoku_rl PPO 模型)
-  gomoku-ai:
-    image: ghcr.io/maserpoassr/wzq-ai:v2.1.0
-    container_name: gomoku-ai
-    restart: unless-stopped
-    environment:
-      - PYTHONUNBUFFERED=1
-      - AI_MODEL_PATH=./models/0.pt
-      - AI_DEVICE=cpu
-    # 模型已包含在镜像中，无需挂载
-    # 如需使用自定义模型，取消下面的注释：
-    # volumes:
-    #   - /path/to/models:/app/models:ro
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # AI 服务资源限制
-    deploy:
-      resources:
-        limits:
-          cpus: '2.0'
-          memory: 2G
-        reservations:
-          cpus: '0.5'
-          memory: 512M
     networks:
       - gomoku-net
 

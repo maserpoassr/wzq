@@ -1196,7 +1196,6 @@
             </div>
             <button class="btn btn-primary" id="createRoomBtn">＋ 创建</button>
             <button class="btn btn-outline" id="quickMatchBtn">⚡ 匹配</button>
-            <button class="btn btn-outline" id="aiGameBtn" title="与 AI 对战">🤖 人机</button>
             <button class="btn btn-outline" id="refreshBtn">↻ 刷新</button>
           </div>
         </div>
@@ -1242,16 +1241,16 @@
             <span id="roleDisplay" style="color: var(--primary)"></span>
           </div>
           
-          <!-- AI 思考中指示器 (Requirements: 4.4) -->
-          <div class="ai-thinking-indicator" id="aiThinkingIndicator">
+          <!-- AI 思考中指示器 (已禁用) -->
+          <div class="ai-thinking-indicator" id="aiThinkingIndicator" style="display: none !important;">
             <span>AI 思考中</span>
             <div class="ai-thinking-dots">
               <span></span><span></span><span></span>
             </div>
           </div>
           
-          <!-- AI 悔棋次数显示 (Requirements: 8.2) -->
-          <div id="aiUndoInfo" style="display: none; font-size: 0.8rem; margin-bottom: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(147, 112, 219, 0.1); border-radius: 4px;">
+          <!-- AI 悔棋次数显示 (已禁用) -->
+          <div id="aiUndoInfo" style="display: none !important; font-size: 0.8rem; margin-bottom: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(147, 112, 219, 0.1); border-radius: 4px;">
             <span>悔棋剩余: <span id="aiUndoCount" style="color: var(--primary); font-weight: bold;">3</span> 次</span>
           </div>
           
@@ -1269,8 +1268,8 @@
             <button class="btn btn-danger" id="leaveRoomBtn" style="grid-column: span 2; margin-top: 0.5rem;">离开房间</button>
           </div>
           
-          <!-- AI 房间专用按钮 (隐藏普通房间按钮) -->
-          <div class="btn-grid" id="aiGameButtonGrid" style="display: none;">
+          <!-- AI 房间专用按钮 (已禁用) -->
+          <div class="btn-grid" id="aiGameButtonGrid" style="display: none !important;">
             <button class="btn btn-outline" id="aiUndoBtn">悔棋</button>
             <button class="btn btn-outline btn-disabled" id="aiInvitePlaceholder" disabled style="opacity: 0.3;">-</button>
             <button class="btn btn-outline btn-disabled" id="aiSwapPlaceholder" disabled style="opacity: 0.3;">-</button>
