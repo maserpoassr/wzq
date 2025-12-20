@@ -8,7 +8,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: ghcr.io/${GITHUB_REPOSITORY:-maserpoassr/wzq}:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-maserpoassr/wzq}-game:latest
     container_name: gomoku
     ports:
       - "3000:3000"

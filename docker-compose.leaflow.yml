@@ -6,7 +6,7 @@ version: '3.8'
 services:
   # Node.js 游戏服务器
   gomoku:
-    image: ghcr.io/maserpoassr/wzq:latest
+    image: ghcr.io/maserpoassr/wzq-game:latest
     container_name: gomoku
     ports:
       - "3000:3000"
