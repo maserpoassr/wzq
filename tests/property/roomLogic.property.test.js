@@ -7,8 +7,10 @@
  * - Property 12: Full Room Rejection
  * - Property 13: Player Leave Cleanup
  * - Property 18: Watcher Addition
+ * - Property 2 (AI Mode): AI Rooms Hidden from Public List
+ * - Property 10 (AI Mode): AI Room Join Rejection
  * 
- * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5**
+ * **Validates: Requirements 3.1, 3.2, 3.3, 3.4, 3.5, 1.4, 7.2, 7.4**
  */
 
 const fc = require('fast-check');
@@ -287,6 +289,236 @@ describe('Room Management Properties', () => {
             const result = manager.joinRoom(room.id, watcher, true);
             
             return result.success === true && result.role === 'watcher';
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * **Feature: ai-vs-human-mode, Property 2: AI Rooms Hidden from Public List**
+   * **Validates: Requirements 1.4**
+   * 
+   * *For any* room list query, AI rooms (rooms with isAIRoom === true) 
+   * should never appear in the returned list.
+   */
+  describe('Property 2: AI Rooms Hidden from Public List', () => {
+    // 难度选项 arbitrary
+    const difficultyArb = fc.constantFrom('easy', 'medium', 'hard');
+    
+    test('AI rooms never appear in public room list', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          difficultyArb,
+          fc.boolean(),
+          (player, difficulty, playerFirst) => {
+            const manager = new RoomManager();
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(player, difficulty, playerFirst);
+            
+            // 获取公开房间列表
+            const roomList = manager.getRoomList();
+            
+            // AI 房间不应该出现在列表中
+            const aiRoomInList = roomList.some(r => r.id === aiRoom.id);
+            
+            return aiRoomInList === false;
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('AI rooms hidden even when mixed with regular rooms', () => {
+      fc.assert(
+        fc.property(
+          fc.array(playerArb, { minLength: 1, maxLength: 5 }),
+          fc.array(playerArb, { minLength: 1, maxLength: 5 }),
+          difficultyArb,
+          (regularPlayers, aiPlayers, difficulty) => {
+            const manager = new RoomManager();
+            const regularRoomIds = new Set();
+            const aiRoomIds = new Set();
+            
+            // 创建普通房间
+            for (const player of regularPlayers) {
+              const room = manager.createRoom('Regular Room', player);
+              regularRoomIds.add(room.id);
+            }
+            
+            // 创建 AI 房间
+            for (const player of aiPlayers) {
+              const room = manager.createAIRoom(player, difficulty, true);
+              aiRoomIds.add(room.id);
+            }
+            
+            // 获取公开房间列表
+            const roomList = manager.getRoomList();
+            
+            // 验证：所有普通房间都在列表中
+            for (const id of regularRoomIds) {
+              if (!roomList.some(r => r.id === id)) {
+                return false;
+              }
+            }
+            
+            // 验证：没有 AI 房间在列表中
+            for (const id of aiRoomIds) {
+              if (roomList.some(r => r.id === id)) {
+                return false;
+              }
+            }
+            
+            return true;
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('isAIRoom correctly identifies AI rooms', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          playerArb,
+          difficultyArb,
+          (regularPlayer, aiPlayer, difficulty) => {
+            const manager = new RoomManager();
+            
+            // 创建普通房间
+            const regularRoom = manager.createRoom('Regular Room', regularPlayer);
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(aiPlayer, difficulty, true);
+            
+            // 验证 isAIRoom 方法
+            const regularIsAI = manager.isAIRoom(regularRoom.id);
+            const aiIsAI = manager.isAIRoom(aiRoom.id);
+            
+            return regularIsAI === false && aiIsAI === true;
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+  });
+
+  /**
+   * **Feature: ai-vs-human-mode, Property 10: AI Room Join Rejection**
+   * **Validates: Requirements 7.2, 7.4**
+   * 
+   * *For any* AI room, any attempt by another player to join (as player or watcher) 
+   * should be rejected.
+   */
+  describe('Property 10: AI Room Join Rejection', () => {
+    // 难度选项 arbitrary
+    const difficultyArb = fc.constantFrom('easy', 'medium', 'hard');
+    
+    test('other players cannot join AI room as player', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          playerArb,
+          difficultyArb,
+          fc.boolean(),
+          (roomOwner, otherPlayer, difficulty, playerFirst) => {
+            // 确保两个玩家不同
+            if (roomOwner.socketId === otherPlayer.socketId) return true;
+            
+            const manager = new RoomManager();
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(roomOwner, difficulty, playerFirst);
+            
+            // 其他玩家尝试作为玩家加入
+            const result = manager.joinRoom(aiRoom.id, otherPlayer, false);
+            
+            // 应该被拒绝
+            return result.success === false && result.error === 'AI房间不允许其他玩家加入';
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('other players cannot join AI room as watcher', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          playerArb,
+          difficultyArb,
+          fc.boolean(),
+          (roomOwner, watcher, difficulty, playerFirst) => {
+            // 确保两个玩家不同
+            if (roomOwner.socketId === watcher.socketId) return true;
+            
+            const manager = new RoomManager();
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(roomOwner, difficulty, playerFirst);
+            
+            // 其他玩家尝试作为观战者加入
+            const result = manager.joinRoom(aiRoom.id, watcher, true);
+            
+            // 应该被拒绝
+            return result.success === false && result.error === 'AI房间不允许其他玩家加入';
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('room owner can rejoin their AI room', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          difficultyArb,
+          fc.boolean(),
+          (roomOwner, difficulty, playerFirst) => {
+            const manager = new RoomManager();
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(roomOwner, difficulty, playerFirst);
+            
+            // 房间拥有者尝试重新加入（模拟重连）
+            const result = manager.joinRoom(aiRoom.id, roomOwner, false);
+            
+            // 应该成功
+            if (!result.success) return false;
+            
+            // 角色应该与创建时一致
+            const expectedRole = playerFirst ? 'black' : 'white';
+            return result.role === expectedRole;
+          }
+        ),
+        { numRuns: 100 }
+      );
+    });
+
+    test('AI room watchers array remains empty', () => {
+      fc.assert(
+        fc.property(
+          playerArb,
+          fc.array(playerArb, { minLength: 1, maxLength: 5 }),
+          difficultyArb,
+          (roomOwner, watchers, difficulty) => {
+            const manager = new RoomManager();
+            
+            // 创建 AI 房间
+            const aiRoom = manager.createAIRoom(roomOwner, difficulty, true);
+            
+            // 多个玩家尝试作为观战者加入
+            for (const watcher of watchers) {
+              if (watcher.socketId !== roomOwner.socketId) {
+                manager.joinRoom(aiRoom.id, watcher, true);
+              }
+            }
+            
+            // AI 房间的观战者数组应该始终为空
+            return aiRoom.watchers.length === 0;
           }
         ),
         { numRuns: 100 }

@@ -1,12 +1,14 @@
-# Gomoku Online - Leaflow 服务器部署配置
+# Gomoku Online - 完整部署配置 (游戏服务器 + AI 服务)
 # 版本: 2.0.0 - 包含人机对战功能
-# 使用方法: docker-compose -f docker-compose.leaflow.yml up -d
 version: '3.8'
 
 services:
   # Node.js 游戏服务器
   gomoku:
-    image: ghcr.io/maserpoassr/wzq:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY:-maserpoassr/wzq}:latest
     container_name: gomoku
     ports:
       - "3000:3000"
@@ -14,9 +16,9 @@ services:
     environment:
       - NODE_ENV=production
       - PORT=3000
-      - AI_SERVICE_URL=http://gomoku-ai:5001
+      - AI_SERVICE_URL=http://ai-service:5001
     depends_on:
-      gomoku-ai:
+      ai-service:
         condition: service_healthy
     logging:
       driver: "json-file"
@@ -29,32 +31,29 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
-    networks:
-      - gomoku-net
 
   # Python AI 服务
-  gomoku-ai:
-    image: ghcr.io/maserpoassr/wzq-ai:latest
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    image: ghcr.io/${GITHUB_REPOSITORY:-maserpoassr/wzq}-ai:latest
     container_name: gomoku-ai
+    ports:
+      - "5001:5001"
     restart: unless-stopped
     environment:
       - PYTHONUNBUFFERED=1
+      - AI_CONFIG_PATH=config.yaml
     volumes:
-      # 如果有预训练模型，挂载到这里
-      # - /path/to/models:/app/models:ro
-      - ai-models:/app/models
+      # 挂载模型文件 (可选，如果有预训练模型)
+      - ./ai-service/models:/app/models:ro
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    # AI 服务资源限制
+    # 资源限制 (AI 计算需要更多资源)
     deploy:
       resources:
         limits:
@@ -63,13 +62,7 @@ services:
         reservations:
           cpus: '0.5'
           memory: 512M
-    networks:
-      - gomoku-net
 
 networks:
-  gomoku-net:
+  default:
     name: gomoku-network
-
-volumes:
-  ai-models:
-    name: gomoku-ai-models

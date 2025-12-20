@@ -956,6 +956,211 @@
       .glass-card { background: white; border: 1px solid #ccc; }
       .btn { background: #eee; color: black; border: 1px solid #ccc; }
     }
+
+    /* ================= AI 对战模式样式 ================= */
+    /* AI 标识样式 */
+    .ai-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: linear-gradient(135deg, rgba(147, 112, 219, 0.3), rgba(138, 43, 226, 0.2));
+      border: 1px solid rgba(147, 112, 219, 0.5);
+      border-radius: 4px;
+      padding: 0.15rem 0.4rem;
+      font-size: 0.65rem;
+      color: #b19cd9;
+      font-weight: bold;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .ai-badge::before {
+      content: '🤖';
+      font-size: 0.7rem;
+    }
+
+    /* AI 思考中状态 */
+    .ai-thinking-indicator {
+      display: none;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: rgba(147, 112, 219, 0.15);
+      border: 1px solid rgba(147, 112, 219, 0.3);
+      border-radius: 6px;
+      color: #b19cd9;
+      font-size: 0.85rem;
+      margin-bottom: 0.5rem;
+    }
+    .ai-thinking-indicator.active {
+      display: flex;
+    }
+    .ai-thinking-dots {
+      display: flex;
+      gap: 3px;
+    }
+    .ai-thinking-dots span {
+      width: 6px;
+      height: 6px;
+      background: #b19cd9;
+      border-radius: 50%;
+      animation: aiThinkingBounce 1.4s infinite ease-in-out both;
+    }
+    .ai-thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+    .ai-thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+    .ai-thinking-dots span:nth-child(3) { animation-delay: 0s; }
+    @keyframes aiThinkingBounce {
+      0%, 80%, 100% { transform: scale(0); }
+      40% { transform: scale(1); }
+    }
+
+    /* 悔棋次数显示 */
+    .undo-count-display {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-left: 0.5rem;
+    }
+    .undo-count-display.warning {
+      color: #e67e22;
+    }
+    .undo-count-display.exhausted {
+      color: #e74c3c;
+    }
+
+    /* AI 难度选择样式 */
+    .difficulty-options {
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      margin: 1rem 0;
+    }
+    .difficulty-option {
+      display: flex;
+      align-items: center;
+      padding: 0.8rem 1rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .difficulty-option:hover {
+      border-color: rgba(197, 160, 89, 0.5);
+      background: rgba(197, 160, 89, 0.1);
+    }
+    .difficulty-option.selected {
+      border-color: var(--primary);
+      background: rgba(197, 160, 89, 0.15);
+    }
+    .difficulty-option input[type="radio"] {
+      display: none;
+    }
+    .difficulty-radio {
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      margin-right: 0.8rem;
+      position: relative;
+      flex-shrink: 0;
+    }
+    .difficulty-option.selected .difficulty-radio {
+      border-color: var(--primary);
+    }
+    .difficulty-option.selected .difficulty-radio::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 10px;
+      height: 10px;
+      background: var(--primary);
+      border-radius: 50%;
+    }
+    .difficulty-info {
+      flex: 1;
+    }
+    .difficulty-name {
+      font-weight: bold;
+      color: var(--text-main);
+      margin-bottom: 0.2rem;
+    }
+    .difficulty-desc {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    /* 先后手选择样式 */
+    .turn-options {
+      display: flex;
+      gap: 1rem;
+      margin: 1rem 0;
+      justify-content: center;
+    }
+    .turn-option {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 1rem 1.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      min-width: 100px;
+    }
+    .turn-option:hover {
+      border-color: rgba(197, 160, 89, 0.5);
+      background: rgba(197, 160, 89, 0.1);
+    }
+    .turn-option.selected {
+      border-color: var(--primary);
+      background: rgba(197, 160, 89, 0.15);
+    }
+    .turn-option input[type="radio"] {
+      display: none;
+    }
+    .turn-stone {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      margin-bottom: 0.5rem;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    }
+    .turn-stone.black {
+      background: radial-gradient(circle at 30% 30%, #555, #000);
+    }
+    .turn-stone.white {
+      background: radial-gradient(circle at 30% 30%, #fff, #ccc);
+      border: 1px solid rgba(200, 200, 200, 0.3);
+    }
+    .turn-label {
+      font-size: 0.85rem;
+      color: var(--text-main);
+      font-weight: bold;
+    }
+    .turn-desc {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+
+    /* AI 按钮禁用状态 */
+    #aiGameBtn.ai-unavailable {
+      opacity: 0.5;
+      cursor: not-allowed;
+      position: relative;
+    }
+    #aiGameBtn.ai-unavailable::after {
+      content: '服务不可用';
+      position: absolute;
+      bottom: -20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 0.6rem;
+      color: #e74c3c;
+      white-space: nowrap;
+    }
   </style>
 </head>
 <body>
@@ -991,6 +1196,7 @@
             </div>
             <button class="btn btn-primary" id="createRoomBtn">＋ 创建</button>
             <button class="btn btn-outline" id="quickMatchBtn">⚡ 匹配</button>
+            <button class="btn btn-outline" id="aiGameBtn" title="与 AI 对战">🤖 人机</button>
             <button class="btn btn-outline" id="refreshBtn">↻ 刷新</button>
           </div>
         </div>
@@ -1036,18 +1242,40 @@
             <span id="roleDisplay" style="color: var(--primary)"></span>
           </div>
           
+          <!-- AI 思考中指示器 (Requirements: 4.4) -->
+          <div class="ai-thinking-indicator" id="aiThinkingIndicator">
+            <span>AI 思考中</span>
+            <div class="ai-thinking-dots">
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+          
+          <!-- AI 悔棋次数显示 (Requirements: 8.2) -->
+          <div id="aiUndoInfo" style="display: none; font-size: 0.8rem; margin-bottom: 0.5rem; padding: 0.4rem 0.6rem; background: rgba(147, 112, 219, 0.1); border-radius: 4px;">
+            <span>悔棋剩余: <span id="aiUndoCount" style="color: var(--primary); font-weight: bold;">3</span> 次</span>
+          </div>
+          
           <div class="chat-box" id="chatMessages"></div>
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.8rem;">
             <input type="text" id="chatInput" placeholder="发送消息..." autocomplete="off" style="padding: 0.5rem; flex: 1; min-width: 0;">
             <button class="btn btn-primary" id="sendChatBtn" style="min-width: 44px; flex-shrink: 0;">➤</button>
           </div>
           
-          <div class="btn-grid">
+          <div class="btn-grid" id="gameButtonGrid">
             <button class="btn btn-outline" id="undoBtn">悔棋</button>
             <button class="btn btn-outline" id="inviteBtn">邀请</button>
             <button class="btn btn-outline" id="swapBtn">换方</button>
             <button class="btn btn-danger" id="surrenderBtn">认输</button>
             <button class="btn btn-danger" id="leaveRoomBtn" style="grid-column: span 2; margin-top: 0.5rem;">离开房间</button>
+          </div>
+          
+          <!-- AI 房间专用按钮 (隐藏普通房间按钮) -->
+          <div class="btn-grid" id="aiGameButtonGrid" style="display: none;">
+            <button class="btn btn-outline" id="aiUndoBtn">悔棋</button>
+            <button class="btn btn-outline btn-disabled" id="aiInvitePlaceholder" disabled style="opacity: 0.3;">-</button>
+            <button class="btn btn-outline btn-disabled" id="aiSwapPlaceholder" disabled style="opacity: 0.3;">-</button>
+            <button class="btn btn-danger" id="aiSurrenderBtn">认输</button>
+            <button class="btn btn-danger" id="aiLeaveRoomBtn" style="grid-column: span 2; margin-top: 0.5rem;">离开房间</button>
           </div>
         </div>
       </div>
@@ -1256,7 +1484,12 @@
       opponentRequest: false, // 对方是否已请求
       waiting: false,        // 是否在等待状态
       opponentLeft: false    // 对方是否已离开
-    }
+    },
+    // AI 对战状态 (Requirements: 1.1, 6.2)
+    aiServiceAvailable: false,  // AI 服务是否可用
+    isAIRoom: false,            // 当前是否在 AI 房间
+    aiThinking: false,          // AI 是否正在思考
+    aiUndoRemaining: 3          // AI 房间悔棋剩余次数
   };
   
   // 重置再来一局状态
@@ -1267,6 +1500,85 @@
       waiting: false,
       opponentLeft: false
     };
+  }
+  
+  // 重置 AI 房间状态
+  function resetAIRoomState() {
+    state.isAIRoom = false;
+    state.aiThinking = false;
+    state.aiUndoRemaining = 3;
+    updateAIThinkingIndicator(false);
+    updateAIUndoDisplay();
+    updateGameButtonsForAIRoom(false);
+  }
+  
+  // 更新 AI 思考指示器 (Requirements: 4.4)
+  function updateAIThinkingIndicator(thinking) {
+    const indicator = $('aiThinkingIndicator');
+    if (indicator) {
+      if (thinking) {
+        indicator.classList.add('active');
+      } else {
+        indicator.classList.remove('active');
+      }
+    }
+    state.aiThinking = thinking;
+  }
+  
+  // 更新 AI 悔棋次数显示 (Requirements: 8.2)
+  function updateAIUndoDisplay() {
+    const infoEl = $('aiUndoInfo');
+    const countEl = $('aiUndoCount');
+    
+    if (!infoEl || !countEl) return;
+    
+    if (state.isAIRoom) {
+      infoEl.style.display = 'block';
+      countEl.textContent = state.aiUndoRemaining;
+      
+      // 根据剩余次数更新样式
+      if (state.aiUndoRemaining === 0) {
+        countEl.style.color = '#e74c3c';
+      } else if (state.aiUndoRemaining === 1) {
+        countEl.style.color = '#e67e22';
+      } else {
+        countEl.style.color = 'var(--primary)';
+      }
+    } else {
+      infoEl.style.display = 'none';
+    }
+  }
+  
+  // 切换普通房间/AI房间按钮显示
+  function updateGameButtonsForAIRoom(isAI) {
+    const normalGrid = $('gameButtonGrid');
+    const aiGrid = $('aiGameButtonGrid');
+    
+    if (normalGrid && aiGrid) {
+      if (isAI) {
+        normalGrid.style.display = 'none';
+        aiGrid.style.display = 'grid';
+      } else {
+        normalGrid.style.display = 'grid';
+        aiGrid.style.display = 'none';
+      }
+    }
+  }
+  
+  // 更新 AI 按钮状态 (Requirements: 6.2)
+  function updateAIButtonStatus() {
+    const aiBtn = $('aiGameBtn');
+    if (aiBtn) {
+      if (state.aiServiceAvailable) {
+        aiBtn.classList.remove('ai-unavailable');
+        aiBtn.disabled = false;
+        aiBtn.title = '与 AI 对战';
+      } else {
+        aiBtn.classList.add('ai-unavailable');
+        aiBtn.disabled = true;
+        aiBtn.title = 'AI 服务不可用';
+      }
+    }
   }
 
   // ==================== 2. Canvas 渲染 (跨设备优化) ====================
@@ -1561,6 +1873,24 @@
       state.lastMove = room.history && room.history.length ? room.history[room.history.length - 1] : null;
       state.isPlacingStone = false;
       
+      // 检测是否是 AI 房间
+      if (room.isAIRoom) {
+        state.isAIRoom = true;
+        // 更新悔棋剩余次数
+        if (room.undoRemaining !== undefined) {
+          state.aiUndoRemaining = room.undoRemaining;
+        } else if (room.undoCount !== undefined && room.maxUndo !== undefined) {
+          state.aiUndoRemaining = room.maxUndo - room.undoCount;
+        }
+        updateAIUndoDisplay();
+        updateGameButtonsForAIRoom(true);
+        
+        // 更新 AI 对手显示
+        if (room.aiConfig) {
+          updateAIOpponentDisplay(room.aiConfig);
+        }
+      }
+      
       // 如果从结束状态变为游戏中，重置再来一局状态
       if (wasEnded && isNowPlaying) {
         resetRematchState();
@@ -1587,12 +1917,35 @@
       state.isPlacingStone = false;
       resetRematchState(); // 重置再来一局状态
       
-      const isWinner = (winner === 1 && state.myRole === 'black') || (winner === 2 && state.myRole === 'white');
-      const text = winner === 1 ? '黑棋获胜' : '白棋获胜';
-      const desc = surrender ? (isWinner ? '对方已认输' : '你已认输') : '五星连珠！';
+      // AI 房间：停止思考指示器
+      if (state.isAIRoom) {
+        updateAIThinkingIndicator(false);
+      }
       
-      // 显示游戏结束弹窗，支持动态更新按钮状态
-      showGameOverModal(text, desc);
+      const isWinner = (winner === 1 && state.myRole === 'black') || (winner === 2 && state.myRole === 'white');
+      const isDraw = winner === 0;
+      
+      let text, desc;
+      if (isDraw) {
+        text = '平局';
+        desc = '棋盘已满，双方平局！';
+      } else {
+        text = winner === 1 ? '黑棋获胜' : '白棋获胜';
+        if (state.isAIRoom) {
+          desc = surrender 
+            ? (isWinner ? 'AI 已认输' : '你已认输') 
+            : (isWinner ? '恭喜你战胜了 AI！' : 'AI 获胜，再接再厉！');
+        } else {
+          desc = surrender ? (isWinner ? '对方已认输' : '你已认输') : '五星连珠！';
+        }
+      }
+      
+      // 根据房间类型显示不同的弹窗
+      if (state.isAIRoom) {
+        showAIGameOverModal(text, desc);
+      } else {
+        showGameOverModal(text, desc);
+      }
     });
     
     // 再来一局等待事件 (Requirements: 1.1, 4.2)
@@ -1755,6 +2108,98 @@
     state.socket.on('room-reset-success', ({ message }) => {
       showToast(message || '房间已重置');
     });
+    
+    // ==================== AI 对战模式事件处理 ====================
+    
+    // AI 服务状态 (Requirements: 6.2)
+    state.socket.on('ai-service-status', ({ available }) => {
+      state.aiServiceAvailable = available;
+      updateAIButtonStatus();
+      if (!available) {
+        console.log('[AI] AI 服务不可用');
+      }
+    });
+    
+    // AI 房间创建成功 (Requirements: 1.1, 1.2)
+    state.socket.on('ai-room-joined', ({ room, role, aiDifficulty, playerColor, aiColor }) => {
+      state.currentRoom = room;
+      state.myRole = role;
+      state.board = room.board;
+      state.lastMove = room.history && room.history.length ? room.history[room.history.length - 1] : null;
+      state.isAIRoom = true;
+      state.aiUndoRemaining = room.undoRemaining !== undefined ? room.undoRemaining : 3;
+      resetRematchState();
+      
+      switchView('gameView');
+      updateGameButtonsForAIRoom(true);
+      updateAIUndoDisplay();
+      updateGameUI();
+      
+      // 显示 AI 对手标识
+      updateAIOpponentDisplay({
+        difficulty: aiDifficulty,
+        aiColor: aiColor,
+        playerColor: playerColor
+      });
+    });
+    
+    // AI 思考状态 (Requirements: 4.4)
+    state.socket.on('ai-thinking', ({ thinking }) => {
+      updateAIThinkingIndicator(thinking);
+    });
+    
+    // AI 落子 (Requirements: 4.2)
+    state.socket.on('ai-moved', ({ x, y, color, room }) => {
+      if (state.board) {
+        state.board[x][y] = color;
+        state.lastMove = { x, y };
+        state.isPlacingStone = false;
+        renderBoard();
+      }
+      
+      // 更新房间状态
+      if (room) {
+        state.currentRoom = room;
+        updateGameUI();
+      }
+    });
+    
+    // AI 悔棋结果 (Requirements: 8.1, 8.2)
+    state.socket.on('ai-undo-result', ({ success, undoCount, remainingUndos, error }) => {
+      if (success) {
+        state.aiUndoRemaining = remainingUndos !== undefined ? remainingUndos : (3 - undoCount);
+        updateAIUndoDisplay();
+        showToast(`悔棋成功（剩余 ${state.aiUndoRemaining} 次）`);
+        
+        // 房间状态会通过 room-updated 事件更新
+      } else {
+        showToast(error || '悔棋失败');
+      }
+    });
+    
+    // AI 再来一局 (Requirements: 7.3)
+    state.socket.on('ai-rematch-start', ({ newPlayerColor, newAIColor, message }) => {
+      closeModal();
+      resetRematchState();
+      
+      // 更新角色
+      state.myRole = newPlayerColor === 1 ? 'black' : 'white';
+      state.lastMove = null;
+      state.aiUndoRemaining = 3;
+      
+      updateAIUndoDisplay();
+      
+      // 更新 AI 对手显示
+      updateAIOpponentDisplay({
+        difficulty: state.currentRoom?.aiConfig?.difficulty || 'medium',
+        aiColor: newAIColor,
+        playerColor: newPlayerColor
+      });
+      
+      showToast(message || '新对局开始！');
+      
+      // 房间状态会通过 room-updated 事件更新
+    });
   }
 
   // HTML 转义函数
@@ -1763,6 +2208,195 @@
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+  }
+  
+  // ==================== AI 对战模式 UI 函数 ====================
+  
+  // 更新 AI 对手显示 (Requirements: 1.3)
+  function updateAIOpponentDisplay(aiConfig) {
+    if (!aiConfig) return;
+    
+    const aiColor = aiConfig.aiColor;
+    const aiNameEl = aiColor === 1 ? $('blackName') : $('whiteName');
+    
+    if (aiNameEl) {
+      // 显示 AI 名称和难度标识
+      const difficultyText = {
+        'easy': '简单',
+        'medium': '中等',
+        'hard': '困难'
+      }[aiConfig.difficulty] || '中等';
+      
+      aiNameEl.innerHTML = `<span class="ai-badge">${difficultyText}</span> AI`;
+    }
+  }
+  
+  // 显示 AI 对战设置弹窗 (Requirements: 2.1, 5.1)
+  function showAIGameSetupModal() {
+    if (!state.aiServiceAvailable) {
+      showToast('AI 服务不可用');
+      return;
+    }
+    
+    const modalContent = `
+      <div style="text-align: left;">
+        <div style="margin-bottom: 1.5rem;">
+          <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--text-main);">选择难度</div>
+          <div class="difficulty-options" id="difficultyOptions">
+            <label class="difficulty-option" data-difficulty="easy">
+              <input type="radio" name="difficulty" value="easy">
+              <div class="difficulty-radio"></div>
+              <div class="difficulty-info">
+                <div class="difficulty-name">🌱 简单</div>
+                <div class="difficulty-desc">适合新手，AI 思考较少</div>
+              </div>
+            </label>
+            <label class="difficulty-option selected" data-difficulty="medium">
+              <input type="radio" name="difficulty" value="medium" checked>
+              <div class="difficulty-radio"></div>
+              <div class="difficulty-info">
+                <div class="difficulty-name">⚔️ 中等</div>
+                <div class="difficulty-desc">平衡挑战，适合大多数玩家</div>
+              </div>
+            </label>
+            <label class="difficulty-option" data-difficulty="hard">
+              <input type="radio" name="difficulty" value="hard">
+              <div class="difficulty-radio"></div>
+              <div class="difficulty-info">
+                <div class="difficulty-name">🔥 困难</div>
+                <div class="difficulty-desc">高强度对抗，AI 深度思考</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <div>
+          <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--text-main);">选择先后手</div>
+          <div class="turn-options" id="turnOptions">
+            <label class="turn-option selected" data-turn="first">
+              <input type="radio" name="turn" value="first" checked>
+              <div class="turn-stone black"></div>
+              <div class="turn-label">先手</div>
+              <div class="turn-desc">执黑棋</div>
+            </label>
+            <label class="turn-option" data-turn="second">
+              <input type="radio" name="turn" value="second">
+              <div class="turn-stone white"></div>
+              <div class="turn-label">后手</div>
+              <div class="turn-desc">执白棋</div>
+            </label>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    $('modalTitle').textContent = '🤖 人机对战';
+    $('modalDesc').innerHTML = modalContent;
+    $('modalInputArea').style.display = 'none';
+    
+    const actionContainer = $('modalActions');
+    actionContainer.innerHTML = '';
+    
+    // 取消按钮
+    const cancelBtn = document.createElement('button');
+    cancelBtn.className = 'btn btn-outline';
+    cancelBtn.textContent = '取消';
+    cancelBtn.onclick = closeModal;
+    actionContainer.appendChild(cancelBtn);
+    
+    // 开始按钮
+    const startBtn = document.createElement('button');
+    startBtn.className = 'btn btn-primary';
+    startBtn.textContent = '开始对战';
+    startBtn.onclick = () => {
+      const difficulty = document.querySelector('input[name="difficulty"]:checked')?.value || 'medium';
+      const playerFirst = document.querySelector('input[name="turn"]:checked')?.value === 'first';
+      
+      closeModal();
+      startAIGame(difficulty, playerFirst);
+    };
+    actionContainer.appendChild(startBtn);
+    
+    $('commonModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+    
+    // 绑定选项点击事件
+    setTimeout(() => {
+      // 难度选项
+      document.querySelectorAll('.difficulty-option').forEach(opt => {
+        opt.onclick = () => {
+          document.querySelectorAll('.difficulty-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          opt.querySelector('input').checked = true;
+        };
+      });
+      
+      // 先后手选项
+      document.querySelectorAll('.turn-option').forEach(opt => {
+        opt.onclick = () => {
+          document.querySelectorAll('.turn-option').forEach(o => o.classList.remove('selected'));
+          opt.classList.add('selected');
+          opt.querySelector('input').checked = true;
+        };
+      });
+    }, 50);
+  }
+  
+  // 开始 AI 对战 (Requirements: 1.1)
+  function startAIGame(difficulty, playerFirst) {
+    if (!state.socket) return;
+    
+    showToast('正在创建 AI 对战房间...');
+    state.socket.emit('create-ai-room', { difficulty, playerFirst });
+  }
+  
+  // 显示 AI 游戏结束弹窗 (Requirements: 4.5, 7.3)
+  function showAIGameOverModal(title, desc) {
+    $('modalTitle').textContent = title;
+    $('modalDesc').textContent = desc;
+    $('modalInputArea').style.display = 'none';
+    
+    const actionContainer = $('modalActions');
+    actionContainer.innerHTML = '';
+    
+    // 再来一局按钮
+    const rematchBtn = document.createElement('button');
+    rematchBtn.className = 'btn btn-primary';
+    rematchBtn.textContent = '再来一局';
+    rematchBtn.onclick = () => {
+      if (state.currentRoom) {
+        state.socket.emit('ai-rematch', { roomId: state.currentRoom.id });
+      }
+    };
+    actionContainer.appendChild(rematchBtn);
+    
+    // 离开按钮
+    const leaveBtn = document.createElement('button');
+    leaveBtn.className = 'btn btn-danger';
+    leaveBtn.textContent = '离开';
+    leaveBtn.onclick = () => {
+      closeModal();
+      leaveAIRoom();
+    };
+    actionContainer.appendChild(leaveBtn);
+    
+    $('commonModal').classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  
+  // 离开 AI 房间
+  function leaveAIRoom() {
+    if (state.currentRoom && state.isAIRoom) {
+      state.socket.emit('leave-room', { roomId: state.currentRoom.id });
+    }
+    state.currentRoom = null;
+    state.board = null;
+    state.lastMove = null;
+    state.isPlacingStone = false;
+    resetRematchState();
+    resetAIRoomState();
+    stopClientTimer();
+    switchView('lobbyView');
   }
 
   // ==================== 4. 辅助逻辑 ====================
@@ -1891,6 +2525,7 @@
     state.lastMove = null;
     state.isPlacingStone = false;
     resetRematchState(); // 重置再来一局状态
+    resetAIRoomState();  // 重置 AI 房间状态
     stopClientTimer();
     switchView('lobbyView');
   }
@@ -1917,6 +2552,15 @@
 
   $('quickMatchBtn').onclick = () => state.socket.emit('quick-match');
   $('refreshBtn').onclick = () => state.socket.emit('refresh-rooms');
+  
+  // AI 对战按钮 (Requirements: 1.1, 6.2)
+  $('aiGameBtn').onclick = () => {
+    if (!state.aiServiceAvailable) {
+      showToast('AI 服务不可用');
+      return;
+    }
+    showAIGameSetupModal();
+  };
   
   // 房间搜索 - 本地过滤 + 服务端精确搜索
   let searchTimeout = null;
@@ -2014,6 +2658,35 @@
     }
   };
   
+  // AI 房间按钮事件 (Requirements: 8.1, 7.3)
+  $('aiUndoBtn').onclick = () => {
+    if (!state.currentRoom || !state.isAIRoom) return;
+    
+    if (state.aiUndoRemaining <= 0) {
+      showToast('悔棋次数已用完');
+      return;
+    }
+    
+    if (state.aiThinking) {
+      showToast('AI 思考中，请稍候');
+      return;
+    }
+    
+    state.socket.emit('ai-undo', { roomId: state.currentRoom.id });
+  };
+  
+  $('aiSurrenderBtn').onclick = () => {
+    if (state.currentRoom && state.isAIRoom && confirm('确定认输?')) {
+      state.socket.emit('surrender', { roomId: state.currentRoom.id });
+    }
+  };
+  
+  $('aiLeaveRoomBtn').onclick = () => {
+    if (confirm('确定离开?')) {
+      leaveAIRoom();
+    }
+  };
+  
   // 邀请链接 - 兼容性处理
   $('inviteBtn').onclick = () => {
     if (!state.currentRoom) return;
@@ -2077,6 +2750,9 @@
     if (!state.currentRoom || state.currentRoom.status !== 'playing') return;
     if (!state.board) return;
     
+    // AI 房间：AI 思考中不允许操作
+    if (state.isAIRoom && state.aiThinking) return;
+    
     const pos = getBoardPosition(clientX, clientY);
     if (!pos) return;
     
@@ -2093,11 +2769,21 @@
       
       if (isMyTurn && state.board[pos.x] && state.board[pos.x][pos.y] === 0) {
         state.isPlacingStone = true;
-        state.socket.emit('place-stone', { 
-          roomId: state.currentRoom.id, 
-          x: pos.x, 
-          y: pos.y 
-        });
+        
+        // AI 房间使用专用事件 (Requirements: 4.1)
+        if (state.isAIRoom) {
+          state.socket.emit('ai-place-stone', { 
+            roomId: state.currentRoom.id, 
+            x: pos.x, 
+            y: pos.y 
+          });
+        } else {
+          state.socket.emit('place-stone', { 
+            roomId: state.currentRoom.id, 
+            x: pos.x, 
+            y: pos.y 
+          });
+        }
         
         // 超时重置
         setTimeout(() => {

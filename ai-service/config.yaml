@@ -1,0 +1,32 @@
+# AI Service Configuration
+
+# Server settings
+server:
+  host: "0.0.0.0"
+  port: 5001
+  debug: false
+
+# Model settings
+model:
+  path: "./models"
+  filename: "best.pth.tar"
+  board_size: 15
+
+# Neural Network parameters (must match training config)
+network:
+  num_channels: 512
+  dropout: 0.1
+
+# MCTS parameters
+mcts:
+  cpuct: 4.0
+
+# Difficulty settings (MCTS simulations per move)
+difficulty:
+  easy: 100
+  medium: 400
+  hard: 800
+
+# System settings
+system:
+  cuda: true  # Will be overridden by torch.cuda.is_available()

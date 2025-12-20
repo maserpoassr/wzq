@@ -3,6 +3,7 @@
  * 处理房间的创建、加入、离开等操作
  * 
  * Requirements: 3.1, 3.2, 3.3, 3.4, 3.5, 3.6, 2.2
+ * AI Mode Requirements: 1.1, 1.2, 1.4, 7.2, 7.4
  */
 
 const GameLogic = require('./gameLogic');
@@ -13,6 +14,8 @@ class RoomManager {
     this.rooms = new Map();
     /** @type {Set<string>} 已使用的房间ID集合 */
     this.usedIds = new Set();
+    /** @type {number} AI房间ID计数器 */
+    this.aiRoomCounter = 0;
   }
 
   /**
@@ -82,6 +85,81 @@ class RoomManager {
   }
 
   /**
+   * 创建 AI 对战房间
+   * Requirements: 1.1, 1.2
+   * @param {{socketId: string, nickname: string}} player - 玩家信息
+   * @param {string} difficulty - 难度 ('easy'|'medium'|'hard')
+   * @param {boolean} playerFirst - 玩家是否先手（执黑）
+   * @returns {Room} 创建的 AI 房间对象
+   */
+  createAIRoom(player, difficulty = 'medium', playerFirst = true) {
+    this.aiRoomCounter++;
+    const roomId = `ai-${this.aiRoomCounter}-${Date.now()}`;
+    const now = Date.now();
+    
+    // 根据玩家选择确定颜色分配
+    const playerColor = playerFirst ? GameLogic.BLACK : GameLogic.WHITE;
+    const aiColor = playerFirst ? GameLogic.WHITE : GameLogic.BLACK;
+    
+    // 创建玩家和 AI 对象
+    const humanPlayer = {
+      socketId: player.socketId,
+      nickname: player.nickname
+    };
+    
+    const aiPlayer = {
+      isAI: true,
+      nickname: 'AI'
+    };
+    
+    /** @type {Room} */
+    const room = {
+      id: roomId,
+      name: 'AI对战',
+      isAIRoom: true,  // 标识为 AI 房间
+      board: GameLogic.createEmptyBoard(),
+      players: {
+        black: playerFirst ? humanPlayer : aiPlayer,
+        white: playerFirst ? aiPlayer : humanPlayer
+      },
+      watchers: [],  // AI 房间不允许观战，始终为空
+      currentTurn: GameLogic.BLACK,
+      history: [],
+      chat: [],
+      winner: null,
+      status: 'playing',  // AI 房间创建后直接开始
+      createdAt: now,
+      lastActivity: now,
+      rematchRequests: { black: false, white: false },
+      
+      // AI 房间特有属性
+      aiConfig: {
+        difficulty: difficulty,
+        aiColor: aiColor,
+        playerColor: playerColor
+      },
+      undoCount: 0,  // AI 房间使用单一计数器
+      maxUndo: 3,    // 最大悔棋次数
+      aiThinking: false  // AI 是否正在思考
+    };
+    
+    this.rooms.set(roomId, room);
+    this.usedIds.add(roomId);
+    return room;
+  }
+
+  /**
+   * 检查房间是否为 AI 房间
+   * Requirements: 1.4
+   * @param {string} roomId - 房间ID
+   * @returns {boolean} 是否为 AI 房间
+   */
+  isAIRoom(roomId) {
+    const room = this.getRoom(roomId);
+    return room ? room.isAIRoom === true : false;
+  }
+
+  /**
    * 获取房间
    * @param {string} roomId - 房间ID
    * @returns {Room|null} 房间对象或null
@@ -92,12 +170,17 @@ class RoomManager {
 
   /**
    * 获取房间列表（用于大厅显示）
-   * Requirements: 2.2
+   * Requirements: 2.2, 1.4
+   * AI 房间不会出现在公开房间列表中
    * @returns {Array} 房间列表
    */
   getRoomList() {
     const list = [];
     for (const room of this.rooms.values()) {
+      // 过滤掉 AI 房间，不在公开列表中显示
+      if (room.isAIRoom) {
+        continue;
+      }
       list.push({
         id: room.id,
         name: room.name,
@@ -134,7 +217,7 @@ class RoomManager {
 
   /**
    * 加入房间
-   * Requirements: 3.2, 3.3, 3.4
+   * Requirements: 3.2, 3.3, 3.4, 7.2, 7.4
    * @param {string} roomId - 房间ID
    * @param {{socketId: string, nickname: string}} player - 玩家信息
    * @param {boolean} asWatcher - 是否作为观战者加入
@@ -145,6 +228,23 @@ class RoomManager {
     
     if (!room) {
       return { success: false, error: '房间不存在' };
+    }
+    
+    // AI 房间隔离：禁止其他玩家加入或观战 AI 房间
+    // Requirements: 7.2, 7.4
+    if (room.isAIRoom) {
+      // 检查是否是房间内的人类玩家（允许重连）
+      const isRoomPlayer = 
+        (room.players.black && !room.players.black.isAI && room.players.black.socketId === player.socketId) ||
+        (room.players.white && !room.players.white.isAI && room.players.white.socketId === player.socketId);
+      
+      if (!isRoomPlayer) {
+        return { success: false, error: 'AI房间不允许其他玩家加入' };
+      }
+      
+      // 允许房间内的人类玩家重连
+      const role = room.players.black && room.players.black.socketId === player.socketId ? 'black' : 'white';
+      return { success: true, role };
     }
     
     room.lastActivity = Date.now();

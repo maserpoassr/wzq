@@ -13,6 +13,8 @@ const RoomManager = require('./src/roomManager');
 const { placeStone, requestUndo, respondUndo, surrender } = require('./src/gameActions');
 const { serializeForClient } = require('./src/serialization');
 const { validateNickname, createChatMessage } = require('./src/utils');
+const AIServiceClient = require('./src/aiServiceClient');
+const AIRoomHandler = require('./src/aiRoomHandler');
 
 // 创建 Express 应用
 const app = express();
@@ -32,6 +34,14 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 房间管理器
 const roomManager = new RoomManager();
 
+// AI 服务客户端和房间处理器
+const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://localhost:5001';
+const aiServiceClient = new AIServiceClient(AI_SERVICE_URL);
+const aiRoomHandler = new AIRoomHandler(roomManager, aiServiceClient);
+
+// AI 服务状态
+let aiServiceAvailable = false;
+
 // 在线用户映射 (socketId -> { nickname, currentRoom })
 const onlineUsers = new Map();
 
@@ -49,6 +59,34 @@ const REMATCH_TIMEOUT = 30000; // 30秒
 
 // 再来一局超时计时器映射 (roomId -> { timer, requesterId })
 const rematchTimers = new Map();
+
+/**
+ * 检查 AI 服务状态
+ * Requirements: 6.1, 6.2
+ */
+async function checkAIServiceStatus() {
+  const result = await aiServiceClient.checkHealth();
+  aiServiceAvailable = result.available;
+  
+  if (result.available) {
+    console.log(`[AI] AI 服务已连接: ${AI_SERVICE_URL}`);
+    if (result.info) {
+      console.log(`[AI] 模型信息: ${JSON.stringify(result.info)}`);
+    }
+  } else {
+    console.warn(`[AI] AI 服务不可用: ${result.error || '未知错误'}`);
+  }
+  
+  return aiServiceAvailable;
+}
+
+/**
+ * 广播 AI 服务状态给所有客户端
+ * Requirements: 6.2
+ */
+function broadcastAIServiceStatus() {
+  io.emit('ai-service-status', { available: aiServiceAvailable });
+}
 
 /**
  * 广播房间列表给所有大厅用户
@@ -252,6 +290,10 @@ io.on('connection', (socket) => {
     
     broadcastOnlineCount();
     socket.emit('room-list', roomManager.getRoomList());
+    
+    // 发送 AI 服务状态
+    // Requirements: 6.2
+    socket.emit('ai-service-status', { available: aiServiceAvailable });
     
     console.log(`[大厅] ${nickname} 加入大厅`);
   });
@@ -829,6 +871,301 @@ io.on('connection', (socket) => {
     console.log(`[再来一局] ${user.nickname} 取消了再来一局请求`);
   });
   
+  // ==================== AI 房间事件处理 ====================
+  // Requirements: 1.1, 4.1, 8.1, 7.3
+  
+  // 创建 AI 房间
+  // Requirements: 1.1
+  socket.on('create-ai-room', async ({ difficulty, playerFirst }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) {
+      socket.emit('lobby-required', { message: '请先加入大厅' });
+      return;
+    }
+    
+    // 检查 AI 服务是否可用
+    if (!aiServiceAvailable) {
+      socket.emit('error', { message: 'AI 服务不可用' });
+      return;
+    }
+    
+    // 创建 AI 房间
+    const { room, needsAIFirstMove } = aiRoomHandler.createAIRoom(
+      { socketId: socket.id, nickname: user.nickname },
+      difficulty || 'medium',
+      playerFirst !== false  // 默认玩家先手
+    );
+    
+    // 离开大厅，加入房间
+    lobbyUsers.delete(socket.id);
+    user.currentRoom = room.id;
+    socket.join(room.id);
+    
+    // 发送房间加入成功
+    socket.emit('ai-room-joined', {
+      room: serializeForClient(room, socket.id),
+      role: room.aiConfig.playerColor === 1 ? 'black' : 'white',
+      aiDifficulty: room.aiConfig.difficulty,
+      playerColor: room.aiConfig.playerColor,
+      aiColor: room.aiConfig.aiColor
+    });
+    
+    console.log(`[AI房间] ${user.nickname} 创建 AI 房间 ${room.id}，难度: ${difficulty}，玩家${playerFirst !== false ? '先手' : '后手'}`);
+    
+    // 如果玩家选择后手，AI 需要先落子
+    // Requirements: 5.2
+    if (needsAIFirstMove) {
+      // 发送 AI 思考中状态
+      socket.emit('ai-thinking', { thinking: true });
+      
+      const aiResult = await aiRoomHandler.handleAIFirstMove(room.id);
+      
+      socket.emit('ai-thinking', { thinking: false });
+      
+      if (aiResult.success && aiResult.move) {
+        socket.emit('ai-moved', {
+          x: aiResult.move.x,
+          y: aiResult.move.y,
+          color: room.aiConfig.aiColor,
+          isRandom: aiResult.isRandom
+        });
+        
+        // 更新房间状态
+        broadcastRoomUpdate(room.id);
+      }
+    }
+  });
+  
+  // AI 房间玩家落子
+  // Requirements: 4.1
+  socket.on('ai-place-stone', async ({ roomId, x, y }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    if (!room.isAIRoom) {
+      socket.emit('error', { message: '不是 AI 房间' });
+      return;
+    }
+    
+    // 检查是否是玩家的回合
+    if (room.currentTurn !== room.aiConfig.playerColor) {
+      socket.emit('error', { message: '不是您的回合' });
+      return;
+    }
+    
+    // 检查 AI 是否正在思考
+    if (room.aiThinking) {
+      socket.emit('error', { message: 'AI 正在思考中，请稍后' });
+      return;
+    }
+    
+    // 执行玩家落子
+    const GameLogic = require('./src/gameLogic');
+    
+    if (!GameLogic.isValidMove(room.board, x, y)) {
+      socket.emit('error', { message: '无效的落子位置' });
+      return;
+    }
+    
+    // 放置玩家的棋子
+    GameLogic.placeStone(room.board, x, y, room.aiConfig.playerColor);
+    
+    // 记录历史
+    room.history.push({
+      x, y,
+      color: room.aiConfig.playerColor,
+      timestamp: Date.now(),
+      isAI: false
+    });
+    
+    // 广播玩家落子
+    socket.emit('stone-placed', { x, y, color: room.aiConfig.playerColor });
+    
+    // 检查玩家是否获胜
+    const playerWon = GameLogic.checkWin(room.board, x, y, room.aiConfig.playerColor);
+    
+    if (playerWon) {
+      room.winner = room.aiConfig.playerColor;
+      room.status = 'ended';
+      socket.emit('game-over', {
+        winner: room.aiConfig.playerColor,
+        winningStones: GameLogic.getWinningStones(room.board, x, y, room.aiConfig.playerColor)
+      });
+      broadcastRoomUpdate(roomId);
+      return;
+    }
+    
+    // 检查是否平局
+    const isBoardFull = room.board.every(row => row.every(cell => cell !== 0));
+    if (isBoardFull) {
+      room.status = 'ended';
+      room.winner = 0;
+      socket.emit('game-over', { winner: 0, winningStones: null });
+      broadcastRoomUpdate(roomId);
+      return;
+    }
+    
+    // 切换到 AI 回合
+    room.currentTurn = room.aiConfig.aiColor;
+    room.lastActivity = Date.now();
+    
+    // 发送 AI 思考中状态
+    // Requirements: 4.3
+    socket.emit('ai-thinking', { thinking: true });
+    
+    // 请求 AI 落子
+    const aiResult = await aiRoomHandler.handlePlayerMove(roomId);
+    
+    // 发送 AI 思考结束
+    socket.emit('ai-thinking', { thinking: false });
+    
+    if (aiResult.success && aiResult.move) {
+      // 发送 AI 落子
+      // Requirements: 4.4
+      socket.emit('ai-moved', {
+        x: aiResult.move.x,
+        y: aiResult.move.y,
+        color: room.aiConfig.aiColor,
+        isRandom: aiResult.isRandom
+      });
+      
+      // 检查 AI 是否获胜
+      if (aiResult.winner) {
+        socket.emit('game-over', {
+          winner: aiResult.winner,
+          winningStones: aiResult.winner !== 0 ? 
+            GameLogic.getWinningStones(room.board, aiResult.move.x, aiResult.move.y, room.aiConfig.aiColor) : null
+        });
+      }
+    } else if (!aiResult.success) {
+      socket.emit('error', { message: aiResult.error || 'AI 落子失败' });
+    }
+    
+    broadcastRoomUpdate(roomId);
+  });
+  
+  // AI 房间悔棋
+  // Requirements: 8.1
+  socket.on('ai-undo', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    if (!room.isAIRoom) {
+      socket.emit('error', { message: '不是 AI 房间' });
+      return;
+    }
+    
+    const result = aiRoomHandler.executeAIUndo(roomId);
+    
+    if (!result.success) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+    
+    // 广播悔棋结果
+    socket.emit('ai-undo-result', {
+      success: true,
+      undoCount: result.undoCount,
+      movesRemoved: result.movesRemoved,
+      remainingUndos: result.remainingUndos
+    });
+    
+    broadcastRoomUpdate(roomId);
+    console.log(`[AI悔棋] 房间 ${roomId} 悔棋成功，已用 ${result.undoCount}/${room.maxUndo} 次`);
+  });
+  
+  // AI 房间再来一局
+  // Requirements: 7.3
+  socket.on('ai-rematch', async ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room) {
+      socket.emit('error', { message: '房间不存在' });
+      return;
+    }
+    
+    if (!room.isAIRoom) {
+      socket.emit('error', { message: '不是 AI 房间' });
+      return;
+    }
+    
+    const result = aiRoomHandler.resetAIRoom(roomId);
+    
+    if (!result.success) {
+      socket.emit('error', { message: result.error });
+      return;
+    }
+    
+    // 发送再来一局结果
+    socket.emit('ai-rematch-start', {
+      newPlayerColor: result.newPlayerColor,
+      newAIColor: result.newAIColor,
+      message: '新游戏开始！黑白棋已交换'
+    });
+    
+    console.log(`[AI再来一局] 房间 ${roomId} 重置成功，玩家新颜色: ${result.newPlayerColor === 1 ? '黑' : '白'}`);
+    
+    // 如果 AI 是先手（黑棋），需要 AI 先落子
+    if (result.needsAIFirstMove) {
+      socket.emit('ai-thinking', { thinking: true });
+      
+      const aiResult = await aiRoomHandler.handleAIFirstMove(roomId);
+      
+      socket.emit('ai-thinking', { thinking: false });
+      
+      if (aiResult.success && aiResult.move) {
+        socket.emit('ai-moved', {
+          x: aiResult.move.x,
+          y: aiResult.move.y,
+          color: result.newAIColor,
+          isRandom: aiResult.isRandom
+        });
+      }
+    }
+    
+    broadcastRoomUpdate(roomId);
+  });
+  
+  // AI 房间离开处理
+  socket.on('leave-ai-room', ({ roomId }) => {
+    const user = onlineUsers.get(socket.id);
+    if (!user) return;
+    
+    const room = roomManager.getRoom(roomId);
+    if (!room || !room.isAIRoom) {
+      socket.emit('error', { message: '房间不存在或不是 AI 房间' });
+      return;
+    }
+    
+    // 销毁 AI 房间
+    const result = aiRoomHandler.handlePlayerLeave(roomId);
+    
+    if (result.success) {
+      socket.leave(roomId);
+      user.currentRoom = null;
+      lobbyUsers.add(socket.id);
+      
+      socket.emit('room-list', roomManager.getRoomList());
+      console.log(`[AI房间] ${user.nickname} 离开并销毁 AI 房间 ${roomId}`);
+    }
+  });
+  
+  // ==================== AI 房间事件处理结束 ====================
+  
   // 刷新房间列表
   socket.on('refresh-rooms', () => {
     socket.emit('room-list', roomManager.getRoomList());
@@ -870,49 +1207,56 @@ io.on('connection', (socket) => {
         const roomId = user.currentRoom;
         const room = roomManager.getRoom(roomId);
         
-        // 检查是否在再来一局等待状态
-        let wasInRematchWaiting = false;
-        let playerColor = null;
-        if (room) {
-          if (room.players.black && room.players.black.socketId === socket.id) {
-            playerColor = 'black';
-          } else if (room.players.white && room.players.white.socketId === socket.id) {
-            playerColor = 'white';
-          }
-          
-          if (room.rematchRequests && (room.rematchRequests.black || room.rematchRequests.white)) {
-            wasInRematchWaiting = true;
-          }
-        }
-        
-        const result = roomManager.leaveRoom(roomId, socket.id);
-        if (result.success) {
-          // 清除再来一局超时计时器
-          clearRematchTimeout(roomId);
-          
-          const roomAfter = roomManager.getRoom(roomId);
-          
-          // 如果在再来一局等待期间断开，通知对方
-          if (wasInRematchWaiting && playerColor) {
-            const opponentColor = playerColor === 'black' ? 'white' : 'black';
-            const opponent = roomAfter?.players[opponentColor];
-            if (opponent) {
-              io.to(opponent.socketId).emit('opponent-left-rematch', {
-                canWaitNewOpponent: true,
-                roomStatus: roomAfter?.status || 'waiting',
-                message: '对方已断开连接'
-              });
+        // 如果是 AI 房间，直接销毁
+        // Requirements: 7.1
+        if (room && room.isAIRoom) {
+          aiRoomHandler.handlePlayerLeave(roomId);
+          console.log(`[AI房间] ${user.nickname} 断开连接，销毁 AI 房间 ${roomId}`);
+        } else {
+          // 检查是否在再来一局等待状态
+          let wasInRematchWaiting = false;
+          let playerColor = null;
+          if (room) {
+            if (room.players.black && room.players.black.socketId === socket.id) {
+              playerColor = 'black';
+            } else if (room.players.white && room.players.white.socketId === socket.id) {
+              playerColor = 'white';
             }
             
-            // 重置房间的再来一局请求状态
-            if (roomAfter && roomAfter.rematchRequests) {
-              roomAfter.rematchRequests = { black: false, white: false };
+            if (room.rematchRequests && (room.rematchRequests.black || room.rematchRequests.white)) {
+              wasInRematchWaiting = true;
             }
           }
           
-          socket.to(roomId).emit('player-left', { nickname: result.nickname });
-          broadcastRoomUpdate(roomId);
-          broadcastRoomList();
+          const result = roomManager.leaveRoom(roomId, socket.id);
+          if (result.success) {
+            // 清除再来一局超时计时器
+            clearRematchTimeout(roomId);
+            
+            const roomAfter = roomManager.getRoom(roomId);
+            
+            // 如果在再来一局等待期间断开，通知对方
+            if (wasInRematchWaiting && playerColor) {
+              const opponentColor = playerColor === 'black' ? 'white' : 'black';
+              const opponent = roomAfter?.players[opponentColor];
+              if (opponent) {
+                io.to(opponent.socketId).emit('opponent-left-rematch', {
+                  canWaitNewOpponent: true,
+                  roomStatus: roomAfter?.status || 'waiting',
+                  message: '对方已断开连接'
+                });
+              }
+              
+              // 重置房间的再来一局请求状态
+              if (roomAfter && roomAfter.rematchRequests) {
+                roomAfter.rematchRequests = { black: false, white: false };
+              }
+            }
+            
+            socket.to(roomId).emit('player-left', { nickname: result.nickname });
+            broadcastRoomUpdate(roomId);
+            broadcastRoomList();
+          }
         }
       }
       
@@ -936,9 +1280,13 @@ setInterval(() => {
 
 // 启动服务器
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`[启动] 五子棋服务器运行在端口 ${PORT}`);
   console.log(`[启动] 访问 http://localhost:${PORT} 开始游戏`);
+  
+  // 检查 AI 服务状态
+  // Requirements: 6.1
+  await checkAIServiceStatus();
 });
 
 // 错误处理
