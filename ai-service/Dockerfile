@@ -1,6 +1,6 @@
 # Gomoku AI Service - Docker 部署文件
-# 基于 PyTorch 的 AlphaZero 五子棋 AI 服务
-FROM python:3.10-slim
+# 基于 gomoku_rl 项目的 PPO 模型
+FROM python:3.11-slim
 
 # 设置工作目录
 WORKDIR /app
@@ -18,21 +18,24 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
     && pip install --no-cache-dir -r requirements.txt
 
 # 复制源代码
-COPY *.py ./
-COPY config.yaml ./
+COPY app.py ./
+COPY gomoku_rl/ ./gomoku_rl/
 
-# 创建模型目录
-RUN mkdir -p models
+# 复制预训练模型
+COPY models/ ./models/
 
 # 暴露端口
 EXPOSE 5001
 
 # 设置环境变量
 ENV PYTHONUNBUFFERED=1
-ENV AI_CONFIG_PATH=config.yaml
+ENV AI_MODEL_PATH=./models/0.pt
+ENV AI_DEVICE=cpu
+ENV AI_HOST=0.0.0.0
+ENV AI_PORT=5001
 
 # 健康检查
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
     CMD curl -f http://localhost:5001/health || exit 1
 
 # 启动命令
